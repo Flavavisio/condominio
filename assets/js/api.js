@@ -8,6 +8,7 @@ const TABLES = [
   'condominium_members',
   'issues',
   'notices',
+  'notice_reads',
   'documents',
   'suppliers',
   'equipment',
@@ -62,6 +63,7 @@ export async function loadWorkspace(userId) {
     supabase.from('condominium_members').select('id,condominium_id,fraction_id,user_id,member_role,status,permissions,created_at'),
     supabase.from('issues').select('*').order('created_at', { ascending: false }),
     supabase.from('notices').select('*').order('published_at', { ascending: false }),
+    supabase.from('notice_reads').select('*').order('read_at', { ascending: false }),
     supabase.from('documents').select('*').order('created_at', { ascending: false }),
     supabase.from('suppliers').select('*').order('name'),
     supabase.from('equipment').select('*').order('name'),
@@ -98,13 +100,14 @@ export async function loadWorkspace(userId) {
     condominiumMembers: members,
     issues: collections[5].data || [],
     notices: collections[6].data || [],
-    documents: collections[7].data || [],
-    suppliers: collections[8].data || [],
-    equipment: collections[9].data || [],
-    maintenance: collections[10].data || [],
-    obligations: collections[11].data || [],
-    obligationChecklistItems: collections[12].data || [],
-    obligationInspections: collections[13].data || [],
+    noticeReads: collections[7].data || [],
+    documents: collections[8].data || [],
+    suppliers: collections[9].data || [],
+    equipment: collections[10].data || [],
+    maintenance: collections[11].data || [],
+    obligations: collections[12].data || [],
+    obligationChecklistItems: collections[13].data || [],
+    obligationInspections: collections[14].data || [],
     profiles
   };
 }
@@ -125,14 +128,53 @@ export async function remove(table, id) {
   return true;
 }
 
+export async function acknowledgeNotice(noticeId, acknowledged = true) {
+  const session = await getSession();
+  const userId = session?.user?.id;
+  if (!userId) throw new Error('Sessão inválida.');
+
+  const payload = {
+    notice_id: noticeId,
+    user_id: userId,
+    read_at: new Date().toISOString(),
+    acknowledged_at: acknowledged ? new Date().toISOString() : null
+  };
+
+  const result = await supabase
+    .from('notice_reads')
+    .upsert(payload, { onConflict: 'notice_id,user_id' })
+    .select()
+    .single();
+
+  return throwIfError(result, 'Confirmar aviso');
+}
+
+export async function updateIssueAssignment(issueId, { supplierId = null, equipmentId = null, maintenanceId = null, assignedTo = null, scheduledFor = null } = {}) {
+  return update('issues', issueId, {
+    supplier_id: supplierId,
+    equipment_id: equipmentId,
+    maintenance_id: maintenanceId,
+    assigned_to: assignedTo,
+    scheduled_for: scheduledFor
+  });
+}
+
+export async function setChecklistItemDone(itemId, done) {
+  return update('obligation_checklist_items', itemId, { done: Boolean(done) });
+}
+
 export const createCompany = values => insert('companies', values);
 export const createCondominium = values => insert('condominiums', values);
 export const createFraction = values => insert('fractions', values);
 export const createIssue = values => insert('issues', values);
+export const updateIssue = (id, values) => update('issues', id, values);
 export const createNotice = values => insert('notices', values);
+export const createDocument = values => insert('documents', values);
 export const createSupplier = values => insert('suppliers', values);
 export const createEquipment = values => insert('equipment', values);
 export const createMaintenance = values => insert('maintenance', values);
 export const createObligation = values => insert('obligations', values);
+export const createChecklistItem = values => insert('obligation_checklist_items', values);
+export const createObligationInspection = values => insert('obligation_inspections', values);
 
 export { supabase };

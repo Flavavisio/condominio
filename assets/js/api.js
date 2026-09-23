@@ -163,6 +163,17 @@ export async function setChecklistItemDone(itemId, done) {
   return update('obligation_checklist_items', itemId, { done: Boolean(done) });
 }
 
+export async function inviteMember(payload) {
+  const result = await supabase.functions.invoke('invite-member', { body: payload });
+  if (result.error) {
+    const error = new Error(result.error.message || 'Não foi possível enviar o convite.');
+    error.cause = result.error;
+    throw error;
+  }
+  if (result.data?.error) throw new Error(result.data.error);
+  return result.data;
+}
+
 export const createCompany = values => insert('companies', values);
 export const createCondominium = values => insert('condominiums', values);
 export const createFraction = values => insert('fractions', values);

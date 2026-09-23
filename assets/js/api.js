@@ -2,6 +2,7 @@ import { supabase } from './supabase.js';
 
 const TABLES = [
   'companies',
+  'company_members',
   'condominiums',
   'fractions',
   'condominium_members',
@@ -55,6 +56,7 @@ export async function loadWorkspace(userId) {
   const queries = [
     supabase.from('profiles').select('user_id,full_name,phone,avatar_url,is_super_admin').eq('user_id', userId).maybeSingle(),
     supabase.from('companies').select('*').order('created_at', { ascending: false }),
+    supabase.from('company_members').select('id,company_id,user_id,role,status,created_at'),
     supabase.from('condominiums').select('*').order('created_at', { ascending: false }),
     supabase.from('fractions').select('*').order('code'),
     supabase.from('condominium_members').select('id,condominium_id,fraction_id,user_id,member_role,status,permissions,created_at'),
@@ -74,8 +76,13 @@ export async function loadWorkspace(userId) {
   throwIfError(profile, 'Perfil');
   collections.forEach((result, index) => throwIfError(result, TABLES[index]));
 
-  const members = collections[3].data || [];
-  const managedUserIds = [...new Set(members.map(item => item.user_id).filter(Boolean))];
+  const members = collections[4].data || [];
+  const companyMembers = collections[1].data || [];
+  const managedUserIds = [...new Set([
+    ...members.map(item => item.user_id),
+    ...companyMembers.map(item => item.user_id)
+  ].filter(Boolean))];
+
   let profiles = [];
   if (managedUserIds.length) {
     const profileResult = await supabase.from('profiles').select('user_id,full_name,phone,avatar_url').in('user_id', managedUserIds);
@@ -85,18 +92,19 @@ export async function loadWorkspace(userId) {
   return {
     profile: profile.data,
     companies: collections[0].data || [],
-    condominiums: collections[1].data || [],
-    fractions: collections[2].data || [],
+    companyMembers,
+    condominiums: collections[2].data || [],
+    fractions: collections[3].data || [],
     condominiumMembers: members,
-    issues: collections[4].data || [],
-    notices: collections[5].data || [],
-    documents: collections[6].data || [],
-    suppliers: collections[7].data || [],
-    equipment: collections[8].data || [],
-    maintenance: collections[9].data || [],
-    obligations: collections[10].data || [],
-    obligationChecklistItems: collections[11].data || [],
-    obligationInspections: collections[12].data || [],
+    issues: collections[5].data || [],
+    notices: collections[6].data || [],
+    documents: collections[7].data || [],
+    suppliers: collections[8].data || [],
+    equipment: collections[9].data || [],
+    maintenance: collections[10].data || [],
+    obligations: collections[11].data || [],
+    obligationChecklistItems: collections[12].data || [],
+    obligationInspections: collections[13].data || [],
     profiles
   };
 }
@@ -117,40 +125,14 @@ export async function remove(table, id) {
   return true;
 }
 
-export async function createCompany(values) {
-  return insert('companies', values);
-}
-
-export async function createCondominium(values) {
-  return insert('condominiums', values);
-}
-
-export async function createFraction(values) {
-  return insert('fractions', values);
-}
-
-export async function createIssue(values) {
-  return insert('issues', values);
-}
-
-export async function createNotice(values) {
-  return insert('notices', values);
-}
-
-export async function createSupplier(values) {
-  return insert('suppliers', values);
-}
-
-export async function createEquipment(values) {
-  return insert('equipment', values);
-}
-
-export async function createMaintenance(values) {
-  return insert('maintenance', values);
-}
-
-export async function createObligation(values) {
-  return insert('obligations', values);
-}
+export const createCompany = values => insert('companies', values);
+export const createCondominium = values => insert('condominiums', values);
+export const createFraction = values => insert('fractions', values);
+export const createIssue = values => insert('issues', values);
+export const createNotice = values => insert('notices', values);
+export const createSupplier = values => insert('suppliers', values);
+export const createEquipment = values => insert('equipment', values);
+export const createMaintenance = values => insert('maintenance', values);
+export const createObligation = values => insert('obligations', values);
 
 export { supabase };

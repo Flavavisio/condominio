@@ -55,7 +55,7 @@ export function onAuthStateChange(callback) {
 
 export async function loadWorkspace(userId) {
   const queries = [
-    supabase.from('profiles').select('user_id,full_name,phone,avatar_url,is_super_admin').eq('user_id', userId).maybeSingle(),
+    supabase.rpc('get_my_access_context').maybeSingle(),
     supabase.from('companies').select('*').order('created_at', { ascending: false }),
     supabase.from('company_members').select('id,company_id,user_id,role,status,created_at'),
     supabase.from('condominiums').select('*').order('created_at', { ascending: false }),
@@ -75,7 +75,7 @@ export async function loadWorkspace(userId) {
 
   const results = await Promise.all(queries);
   const [profile, ...collections] = results;
-  throwIfError(profile, 'Perfil');
+  throwIfError(profile, 'Contexto de acesso');
   collections.forEach((result, index) => throwIfError(result, TABLES[index]));
 
   const members = collections[4].data || [];

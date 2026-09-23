@@ -1,0 +1,10 @@
+create index if not exists idx_documents_created_by on public.documents(created_by);
+create index if not exists idx_equipment_supplier_id on public.equipment(supplier_id);
+create index if not exists idx_maintenance_created_by on public.maintenance(created_by);
+create index if not exists idx_maintenance_equipment_id on public.maintenance(equipment_id);
+create index if not exists idx_maintenance_supplier_id on public.maintenance(supplier_id);
+create index if not exists idx_notices_created_by on public.notices(created_by);
+create index if not exists idx_obligation_inspections_condominium_id on public.obligation_inspections(condominium_id);
+create index if not exists idx_obligation_inspections_performed_by on public.obligation_inspections(performed_by);
+create index if not exists idx_obligations_document_id on public.obligations(document_id);
+create index if not exists idx_obligations_supplier_id on public.obligations(supplier_id);

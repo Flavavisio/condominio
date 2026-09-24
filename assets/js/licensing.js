@@ -44,7 +44,10 @@ async function resolveIdentity() {
   currentUser = sessionData?.session?.user || null;
   access = null;
   currentAdminCompany = null;
-  if (!currentUser) return;
+  if (!currentUser) {
+    document.querySelector('.cf-license-banner')?.remove();
+    return;
+  }
   const { data } = await supabase.rpc('get_my_access_context').maybeSingle();
   access = data || null;
   if (access?.is_super_admin) return;
@@ -70,14 +73,14 @@ function injectSuperAdminNav() {
 }
 
 async function injectAdminLicenseBanner() {
-  document.querySelector('.cf-license-banner')?.remove();
+  if (document.querySelector('.cf-license-banner')) return;
   if (!currentUser || access?.is_super_admin || !currentAdminCompany) return;
   const { data } = await supabase.from('company_admin_licenses').select('id,billing_cycle,starts_on,expires_on,status,license_key').eq('company_id', currentAdminCompany).eq('user_id', currentUser.id).order('created_at',{ascending:false}).limit(1);
   const license = data?.[0] || null;
   const state = effectiveState(license);
   const main = document.querySelector('.main');
   const topbar = document.querySelector('.topbar');
-  if (!main || !topbar) return;
+  if (!main || !topbar || document.querySelector('.cf-license-banner')) return;
   const banner = document.createElement('div');
   banner.className = `cf-license-banner ${state.key}`;
   banner.innerHTML = license ? `<div><strong>Licença ${esc(state.label)}</strong><span>${license.billing_cycle === 'annual' ? 'Anual' : 'Mensal'} · válida até ${fmt(license.expires_on)}</span></div><b>${esc(license.license_key)}</b>` : `<div><strong>Sem licença ativa</strong><span>O Super Admin precisa de emitir uma licença mensal ou anual para esta conta de administrador.</span></div><b>ACESSO ADMINISTRATIVO BLOQUEADO</b>`;

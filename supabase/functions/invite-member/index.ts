@@ -86,6 +86,15 @@ export default {
       if (!membership || membership.role !== "admin") {
         return json({ error: "Apenas o administrador da empresa pode criar ou convidar colaboradores." }, 403);
       }
+
+      const { data: licensed, error: licenseError } = await ctx.supabase.rpc(
+        "has_my_active_company_admin_license",
+        { p_company_id: targetCompanyId }
+      );
+      if (licenseError) return json({ error: licenseError.message }, 400);
+      if (!licensed) {
+        return json({ error: "A licença desta conta de administrador não está ativa. Contacte o Super Admin." }, 403);
+      }
     }
 
     let targetUser: any = null;

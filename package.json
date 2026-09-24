@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "node --check assets/js/supabase.js && node --check assets/js/api.js && node --check assets/js/app.js && node --check assets/js/admin-enhancements.js && node --check assets/js/condo-tools.js && node --check assets/js/finance.js && node --check assets/js/finance-actions.js && node --check assets/js/company-team.js && node --check assets/js/branding-isolation.js"
+    "check": "node --check assets/js/supabase.js && node --check assets/js/api.js && node --check assets/js/app.js && node --check assets/js/admin-enhancements.js && node --check assets/js/condo-tools.js && node --check assets/js/finance.js && node --check assets/js/finance-actions.js && node --check assets/js/company-team.js && node --check assets/js/licensing.js && node --check assets/js/pwa.js && node --check assets/js/branding-isolation.js && node --check sw.js"
   }
 }

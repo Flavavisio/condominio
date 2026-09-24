@@ -39,26 +39,28 @@ async function resolveAdminCompany() {
   currentUser = sessionData?.session?.user || null;
   adminMembership = null;
   company = null;
-  if (!currentUser) return;
+  if (!currentUser) return false;
 
   const { data: access } = await supabase.rpc('get_my_access_context').maybeSingle();
-  if (access?.is_super_admin) return;
+  if (access?.is_super_admin) return false;
 
-  const { data: memberships, error } = await supabase
-    .from('company_members')
-    .select('id,company_id,user_id,role,status')
-    .eq('user_id', currentUser.id)
-    .eq('status', 'active')
-    .eq('role', 'admin');
-  if (error || !memberships?.length) return;
+  const { data: context, error } = await supabase.rpc('get_my_company_admin_context').maybeSingle();
+  if (error || !context?.company_id) return false;
 
-  adminMembership = memberships[0];
-  const { data: companyData, error: companyError } = await supabase
-    .from('companies')
-    .select('*')
-    .eq('id', adminMembership.company_id)
-    .maybeSingle();
-  if (!companyError) company = companyData || null;
+  adminMembership = {
+    company_id: context.company_id,
+    user_id: currentUser.id,
+    role: context.member_role,
+    status: context.member_status
+  };
+
+  company = {
+    id: context.company_id,
+    name: context.company_name,
+    label: context.company_label || context.company_name
+  };
+
+  return true;
 }
 
 function injectTeamNav() {
@@ -66,20 +68,52 @@ function injectTeamNav() {
     document.querySelector('.cf-team-nav')?.remove();
     return;
   }
+
   const nav = document.querySelector('.sidebar nav');
   if (!nav || nav.querySelector('.cf-team-nav')) return;
+
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'nav-item cf-team-nav';
   btn.innerHTML = '<span>♙</span>Equipa';
   btn.addEventListener('click', openTeam);
+
   const dashboard = [...nav.querySelectorAll('.nav-item')].find(item => item.textContent.includes('Dashboard'));
   if (dashboard?.nextSibling) nav.insertBefore(btn, dashboard.nextSibling);
   else nav.append(btn);
 }
 
+function injectDashboardShortcut() {
+  if (!company || !adminMembership) return;
+  if (document.querySelector('.cf-team-dashboard-shortcut')) return;
+
+  const title = document.querySelector('.topbar h1')?.textContent?.trim();
+  if (title !== 'Dashboard') return;
+
+  const kpis = document.querySelector('.main .kpi-grid');
+  if (!kpis) return;
+
+  const card = document.createElement('section');
+  card.className = 'command-card cf-team-dashboard-shortcut';
+  card.innerHTML = `
+    <div>
+      <span class="eyebrow">GESTÃO DA EQUIPA</span>
+      <h2>Gestores e funcionários</h2>
+      <p>Crie gestores, funcionários e atribua a cada um os condomínios pelos quais fica responsável.</p>
+    </div>
+    <div class="command-actions">
+      <button class="light-btn" type="button" data-team-dashboard-open>Gerir equipa</button>
+    </div>`;
+  card.querySelector('[data-team-dashboard-open]')?.addEventListener('click', openTeam);
+  kpis.insertAdjacentElement('afterend', card);
+}
+
 async function loadTeamContext() {
-  if (!company) throw new Error('Empresa gestora não identificada.');
+  if (!company) {
+    const ok = await resolveAdminCompany();
+    if (!ok) throw new Error('A conta atual não é Administrador da Empresa Gestora.');
+  }
+
   const [{ data: members, error: memberError }, { data: condos, error: condoError }] = await Promise.all([
     supabase.rpc('list_company_users', { p_company_id: company.id }),
     supabase.from('condominiums').select('id,name,address,city,status').eq('company_id', company.id).order('name')
@@ -124,12 +158,17 @@ function teamCard(member, assignments) {
 
 async function openTeam() {
   try {
+    if (!company || !adminMembership) {
+      const ok = await resolveAdminCompany();
+      if (!ok) return toast('Apenas o Administrador da Empresa Gestora pode gerir a equipa.', true);
+    }
+
     const ctx = await loadTeamContext();
     const root = layer('cf-team-overlay', `
       <section class="cf-team-page">
         <header class="cf-team-head">
-          <div><span>EMPRESA GESTORA</span><h2>Equipa</h2><p>${esc(company.label || company.name)} · Funcionários, gestores e condomínios atribuídos.</p></div>
-          <div class="cf-team-head-actions"><button class="cf-team-primary" data-team-invite>＋ Novo funcionário</button><button class="cf-team-close" data-team-close>✕</button></div>
+          <div><span>EMPRESA GESTORA</span><h2>Equipa</h2><p>${esc(company.label || company.name)} · Gestores, funcionários e condomínios atribuídos.</p></div>
+          <div class="cf-team-head-actions"><button class="cf-team-primary" data-team-invite>＋ Novo gestor / funcionário</button><button class="cf-team-close" data-team-close>✕</button></div>
         </header>
         <div class="cf-team-kpis">
           <div><strong>${ctx.members.length}</strong><span>Utilizadores</span></div>
@@ -138,12 +177,12 @@ async function openTeam() {
           <div><strong>${ctx.condos.length}</strong><span>Condomínios</span></div>
         </div>
         <div class="cf-team-body">
-          <div class="cf-team-section-title"><div><h3>Equipa da empresa</h3><p>O administrador vê toda a carteira. Gestores e funcionários veem apenas os condomínios que lhes forem atribuídos.</p></div></div>
+          <div class="cf-team-section-title"><div><h3>Equipa da empresa</h3><p>O Administrador vê toda a carteira. Cada Gestor ou Funcionário vê apenas os condomínios que lhe forem atribuídos.</p></div></div>
           <div class="cf-team-list">${ctx.members.length ? ctx.members.map(m => teamCard(m, ctx.assignments)).join('') : '<div class="cf-team-empty">Ainda não existem colaboradores.</div>'}</div>
         </div>
       </section>`);
 
-    root.querySelector('[data-team-invite]')?.addEventListener('click', () => openInvite(ctx));
+    root.querySelector('[data-team-invite]')?.addEventListener('click', openInvite);
     root.querySelectorAll('[data-team-assign]').forEach(btn => btn.addEventListener('click', () => {
       const member = ctx.members.find(m => m.user_id === btn.dataset.teamAssign);
       if (member) openAssignments(member, ctx);
@@ -153,10 +192,10 @@ async function openTeam() {
   }
 }
 
-function openInvite(ctx) {
+function openInvite() {
   const root = layer('cf-team-modal-backdrop', `
     <section class="cf-team-modal">
-      <header><div><span>EQUIPA</span><h2>Novo funcionário</h2><p>O utilizador recebe um convite por email e fica associado à sua empresa.</p></div><button data-team-close>✕</button></header>
+      <header><div><span>EQUIPA</span><h2>Novo gestor / funcionário</h2><p>O utilizador recebe um convite por email e fica associado à sua empresa.</p></div><button data-team-close>✕</button></header>
       <form id="cfTeamInviteForm" class="cf-team-form">
         <label>Nome completo<input name="fullName" required placeholder="João Silva"></label>
         <label>Email<input name="email" type="email" required placeholder="joao@empresa.pt"></label>
@@ -186,7 +225,7 @@ function openInvite(ctx) {
       return toast(data?.error || error?.message || 'Não foi possível criar o colaborador.', true);
     }
     root.remove();
-    toast(data?.invited ? 'Convite enviado. O colaborador já foi associado à empresa.' : 'Utilizador existente associado à empresa.');
+    toast(data?.invited ? 'Convite enviado. O colaborador foi associado à empresa.' : 'Utilizador existente associado à empresa.');
     await openTeam();
   });
 }
@@ -210,7 +249,8 @@ function openAssignments(member, ctx) {
     button.disabled = true;
     button.textContent = 'A guardar…';
     const selected = [...event.currentTarget.querySelectorAll('input[name="condominium"]:checked')].map(input => input.value);
-    const { data, error } = await supabase.rpc('set_staff_condominium_assignments', {
+    const { error } = await supabase.rpc('set_company_user_condominiums', {
+      p_company_id: company.id,
       p_user_id: member.user_id,
       p_condominium_ids: selected
     });
@@ -220,14 +260,17 @@ function openAssignments(member, ctx) {
       return toast(error.message, true);
     }
     root.remove();
-    toast(`${Number(data || 0)} condomínio(s) atribuído(s).`);
+    toast(`${selected.length} condomínio(s) atribuído(s).`);
     await openTeam();
   });
 }
 
 function scheduleInject() {
   clearTimeout(observerTimer);
-  observerTimer = setTimeout(injectTeamNav, 60);
+  observerTimer = setTimeout(() => {
+    injectTeamNav();
+    injectDashboardShortcut();
+  }, 80);
 }
 
 async function initialize() {
@@ -235,8 +278,14 @@ async function initialize() {
   scheduleInject();
 }
 
+window.CondominioCompanyTeam = {
+  open: openTeam,
+  refresh: initialize
+};
+
 const observer = new MutationObserver(scheduleInject);
 observer.observe(document.documentElement, { childList: true, subtree: true });
 
-supabase.auth.onAuthStateChange(() => setTimeout(initialize, 80));
+supabase.auth.onAuthStateChange(() => setTimeout(initialize, 120));
+window.addEventListener('focus', () => setTimeout(initialize, 80));
 initialize();

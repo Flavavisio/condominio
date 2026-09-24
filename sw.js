@@ -1,4 +1,4 @@
-const CACHE = 'condominio-facil-v2';
+const CACHE = 'condominio-facil-v3';
 const CORE = ['./','./index.html','./manifest.webmanifest','./assets/icons/cf-icon.svg'];
 
 self.addEventListener('install', event => {

@@ -15,7 +15,7 @@ function toast(message, error = false) {
   el.className = `cf-team-toast ${error ? 'error' : ''}`;
   el.textContent = message;
   document.body.append(el);
-  setTimeout(() => el.remove(), 3800);
+  setTimeout(() => el.remove(), 5000);
 }
 
 function layer(className, html) {
@@ -71,15 +71,11 @@ async function resolveContext() {
 function ensureTeamNav() {
   const nav = document.querySelector('.sidebar nav');
   if (!nav) return;
-
   if (!company || !membership) {
     nav.querySelector('.cf-team-core-nav')?.remove();
     return;
   }
-
   if (nav.querySelector('.cf-team-core-nav')) return;
-
-  // Remove older injected team button if one exists, so there is only one source of truth.
   nav.querySelector('.cf-team-nav')?.remove();
 
   const btn = document.createElement('button');
@@ -208,6 +204,18 @@ async function openTeam() {
   }
 }
 
+async function edgeErrorMessage(error, data) {
+  if (data?.error) return data.error;
+  try {
+    if (error?.context instanceof Response) {
+      const cloned = error.context.clone();
+      const payload = await cloned.json();
+      if (payload?.error) return payload.error;
+    }
+  } catch {}
+  return error?.message || 'Não foi possível criar o colaborador.';
+}
+
 function openInvite() {
   const root = layer('cf-team-modal-backdrop', `
     <section class="cf-team-modal">
@@ -215,9 +223,10 @@ function openInvite() {
       <form id="cfTeamCoreInvite" class="cf-team-form">
         <label>Nome completo<input name="fullName" required placeholder="João Silva"></label>
         <label>Email<input name="email" type="email" required placeholder="joao@empresa.pt"></label>
-        <label class="wide">Função<select name="role"><option value="manager">Gestor</option><option value="staff">Funcionário</option></select></label>
-        <div class="cf-team-note wide">O Administrador é o único perfil que gere a equipa. O Gestor e o Funcionário ficam limitados aos condomínios atribuídos.</div>
-        <div class="cf-team-form-actions wide"><button type="button" class="cf-team-secondary" data-team-close>Cancelar</button><button type="submit" class="cf-team-primary">Criar / convidar</button></div>
+        <label>Password inicial<input name="password" type="password" required minlength="8" autocomplete="new-password" placeholder="Mínimo 8 caracteres"></label>
+        <label>Função<select name="role"><option value="manager">Gestor</option><option value="staff">Funcionário</option></select></label>
+        <div class="cf-team-note wide">A conta é criada diretamente. Entregue o email e a password inicial ao colaborador. O Administrador continua a ser o único perfil que gere a equipa.</div>
+        <div class="cf-team-form-actions wide"><button type="button" class="cf-team-secondary" data-team-close>Cancelar</button><button type="submit" class="cf-team-primary">Criar conta</button></div>
       </form>
     </section>`);
 
@@ -232,6 +241,7 @@ function openInvite() {
       body: {
         email: String(v.email || '').trim().toLowerCase(),
         fullName: String(v.fullName || '').trim(),
+        password: String(v.password || ''),
         companyId: company.id,
         companyRole: v.role
       }
@@ -239,12 +249,13 @@ function openInvite() {
 
     if (error || data?.error) {
       button.disabled = false;
-      button.textContent = 'Criar / convidar';
-      return toast(data?.error || error?.message || 'Não foi possível criar o colaborador.', true);
+      button.textContent = 'Criar conta';
+      const message = await edgeErrorMessage(error, data);
+      return toast(message, true);
     }
 
     root.remove();
-    toast(data?.invited ? 'Convite enviado e colaborador associado à empresa.' : 'Utilizador associado à empresa.');
+    toast(data?.created ? 'Conta criada e associada à empresa.' : 'O email já existia e foi associado à empresa.');
     await openTeam();
   });
 }

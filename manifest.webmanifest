@@ -1,0 +1,19 @@
+{
+  "name": "Condomínio Fácil",
+  "short_name": "Condomínio Fácil",
+  "description": "Gestão de condomínios, ocorrências, serviços, quotas e alertas.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f7fb",
+  "theme_color": "#101828",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "./assets/icons/cf-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -15,7 +15,20 @@ function removeGate() {
   document.querySelector('.cf-license-gate')?.remove();
 }
 
-function showGate(company, license) {
+async function getAccess(user) {
+  const { data: rpcData, error: rpcError } = await supabase.rpc('get_my_access_context').maybeSingle();
+  if (!rpcError && rpcData) return rpcData;
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('user_id,full_name,is_super_admin')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (!profileError && profile) return profile;
+  return null;
+}
+
+function showGate(company, license, user) {
   removeGate();
   const root = document.createElement('div');
   root.className = 'cf-license-gate';
@@ -25,6 +38,7 @@ function showGate(company, license) {
     <span>CONDOMÍNIO FÁCIL</span>
     <h1>${esc(state)}</h1>
     <p>A conta de administrador da empresa <strong>${esc(company?.label || company?.name || 'gestora')}</strong> necessita de uma licença mensal ou anual ativa emitida pelo Super Admin.</p>
+    <p style="margin-top:8px;font-size:11px;color:#667085">Conta ativa: <strong>${esc(user?.email || '—')}</strong></p>
     ${license ? `<div class="cf-license-gate-meta"><div><small>Tipo</small><strong>${license.billing_cycle === 'annual' ? 'Anual' : 'Mensal'}</strong></div><div><small>Validade</small><strong>${fmt(license.expires_on)}</strong></div></div>` : ''}
     <div class="cf-license-gate-actions"><button type="button" data-license-recheck>Verificar licença</button><button type="button" class="danger" data-license-logout>Terminar sessão</button></div>
   </section>`;
@@ -41,8 +55,14 @@ async function checkLicenseGate(force = false) {
     const user = sessionData?.session?.user;
     if (!user) { removeGate(); return; }
 
-    const { data: access } = await supabase.rpc('get_my_access_context').maybeSingle();
-    if (access?.is_super_admin) { removeGate(); return; }
+    const access = await getAccess(user);
+    if (!access) {
+      // Nunca bloquear a interface apenas porque a leitura do perfil falhou.
+      // As regras RLS continuam a proteger as operações no backend.
+      removeGate();
+      return;
+    }
+    if (access.is_super_admin) { removeGate(); return; }
 
     const { data: memberships, error: memberError } = await supabase
       .from('company_members')
@@ -53,10 +73,11 @@ async function checkLicenseGate(force = false) {
     if (memberError || !memberships?.length) { removeGate(); return; }
 
     const companyIds = memberships.map(m => m.company_id);
-    const [{ data: licenses }, { data: companies }] = await Promise.all([
+    const [{ data: licenses, error: licenseError }, { data: companies, error: companyError }] = await Promise.all([
       supabase.from('company_admin_licenses').select('id,company_id,user_id,billing_cycle,starts_on,expires_on,status').eq('user_id',user.id).in('company_id',companyIds).order('created_at',{ascending:false}),
       supabase.from('companies').select('id,name,label').in('id',companyIds)
     ]);
+    if (licenseError || companyError) { removeGate(); return; }
 
     const latestByCompany = new Map();
     for (const license of licenses || []) if (!latestByCompany.has(license.company_id)) latestByCompany.set(license.company_id, license);
@@ -65,7 +86,7 @@ async function checkLicenseGate(force = false) {
 
     const companyId = companyIds[0];
     const company = (companies || []).find(c => c.id === companyId);
-    showGate(company, latestByCompany.get(companyId) || null);
+    showGate(company, latestByCompany.get(companyId) || null, user);
   } finally {
     checking = false;
   }
@@ -73,4 +94,5 @@ async function checkLicenseGate(force = false) {
 
 supabase.auth.onAuthStateChange(() => setTimeout(() => checkLicenseGate(true),120));
 window.addEventListener('load', () => checkLicenseGate(true));
+window.addEventListener('focus', () => setTimeout(() => checkLicenseGate(true),80));
 setTimeout(() => checkLicenseGate(true),700);

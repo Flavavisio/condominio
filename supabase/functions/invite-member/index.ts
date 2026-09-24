@@ -83,8 +83,8 @@ export default {
         .maybeSingle();
 
       if (membershipError) return json({ error: membershipError.message }, 400);
-      if (!membership || !["admin", "manager"].includes(membership.role)) {
-        return json({ error: "Sem permissão para convidar utilizadores para esta empresa." }, 403);
+      if (!membership || membership.role !== "admin") {
+        return json({ error: "Apenas o administrador da empresa pode criar ou convidar colaboradores." }, 403);
       }
     }
 

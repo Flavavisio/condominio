@@ -1,8 +1,9 @@
-import { withSupabase } from "npm:@supabase/server@1.8.0";
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 type InvitePayload = {
   email?: string;
   fullName?: string;
+  password?: string;
   companyId?: string | null;
   companyRole?: "admin" | "manager" | "staff";
   condominiumId?: string | null;
@@ -10,10 +11,13 @@ type InvitePayload = {
   memberRole?: "owner" | "tenant" | "representative" | "porter";
 };
 
-const json = (body: unknown, status = 200) => Response.json(body, { status });
+const json = (body: unknown, status = 200) => Response.json(body, {
+  status,
+  headers: { "Content-Type": "application/json" }
+});
 
 async function findExistingUserByEmail(admin: any, email: string) {
-  for (let page = 1; page <= 10; page += 1) {
+  for (let page = 1; page <= 20; page += 1) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 100 });
     if (error) throw error;
     const user = data.users.find((item: any) => String(item.email || "").toLowerCase() === email);
@@ -23,90 +27,139 @@ async function findExistingUserByEmail(admin: any, email: string) {
   return null;
 }
 
-export default {
-  fetch: withSupabase({ auth: "user" }, async (req, ctx) => {
-    if (req.method !== "POST") return json({ error: "Método não permitido." }, 405);
+Deno.serve(async (req: Request) => {
+  if (req.method !== "POST") return json({ error: "Método não permitido." }, 405);
 
-    let body: InvitePayload;
-    try { body = await req.json(); } catch { return json({ error: "Pedido inválido." }, 400); }
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const authHeader = req.headers.get("Authorization") || "";
+  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (!token) return json({ error: "Utilizador não autenticado." }, 401);
 
-    const email = String(body.email || "").trim().toLowerCase();
-    const fullName = String(body.fullName || "").trim();
-    const companyId = body.companyId || null;
-    const condominiumId = body.condominiumId || null;
-    const fractionId = body.fractionId || null;
-    const companyRole = body.companyRole || "staff";
-    const memberRole = body.memberRole || "owner";
-    const callerId = ctx.userClaims?.sub;
+  const admin = createClient(supabaseUrl, serviceRole, {
+    auth: { autoRefreshToken: false, persistSession: false }
+  });
 
-    if (!callerId) return json({ error: "Utilizador não autenticado." }, 401);
-    if (!email || !email.includes("@")) return json({ error: "Email inválido." }, 400);
-    if (!companyId && !condominiumId) return json({ error: "Indique a empresa gestora ou o condomínio." }, 400);
-    if (!["admin", "manager", "staff"].includes(companyRole)) return json({ error: "Papel da empresa inválido." }, 400);
-    if (!["owner", "tenant", "representative", "porter"].includes(memberRole)) return json({ error: "Papel do condomínio inválido." }, 400);
+  const { data: userData, error: userError } = await admin.auth.getUser(token);
+  const caller = userData?.user;
+  if (userError || !caller) return json({ error: "Sessão inválida ou expirada." }, 401);
 
-    const { data: profile, error: profileError } = await ctx.supabase.from("profiles").select("is_super_admin").eq("user_id", callerId).maybeSingle();
-    if (profileError) return json({ error: profileError.message }, 400);
-    const isSuperAdmin = Boolean(profile?.is_super_admin);
+  let body: InvitePayload;
+  try { body = await req.json(); } catch { return json({ error: "Pedido inválido." }, 400); }
 
-    let targetCompanyId = companyId;
-    if (condominiumId) {
-      const { data: condo, error: condoError } = await ctx.supabase.from("condominiums").select("id,company_id").eq("id", condominiumId).maybeSingle();
-      if (condoError || !condo) return json({ error: "Condomínio não encontrado ou sem acesso." }, 404);
-      if (companyId && companyId !== condo.company_id) return json({ error: "O condomínio não pertence à empresa indicada." }, 400);
-      targetCompanyId = condo.company_id;
-    }
-    if (!targetCompanyId) return json({ error: "Empresa gestora não encontrada." }, 400);
+  const email = String(body.email || "").trim().toLowerCase();
+  const fullName = String(body.fullName || "").trim();
+  const password = String(body.password || "");
+  const companyId = body.companyId || null;
+  const condominiumId = body.condominiumId || null;
+  const fractionId = body.fractionId || null;
+  const companyRole = body.companyRole || "staff";
+  const memberRole = body.memberRole || "owner";
 
-    if (!isSuperAdmin) {
-      const { data: membership, error: membershipError } = await ctx.supabase.from("company_members").select("role,status").eq("company_id", targetCompanyId).eq("user_id", callerId).eq("status", "active").maybeSingle();
-      if (membershipError) return json({ error: membershipError.message }, 400);
-      if (!membership || membership.role !== "admin") return json({ error: "Apenas o administrador da empresa pode criar ou convidar colaboradores." }, 403);
+  if (!email || !email.includes("@")) return json({ error: "Email inválido." }, 400);
+  if (!companyId && !condominiumId) return json({ error: "Indique a empresa gestora ou o condomínio." }, 400);
+  if (!["admin", "manager", "staff"].includes(companyRole)) return json({ error: "Papel da empresa inválido." }, 400);
+  if (!["owner", "tenant", "representative", "porter"].includes(memberRole)) return json({ error: "Papel do condomínio inválido." }, 400);
 
-      const today = new Date().toISOString().slice(0, 10);
-      const { data: license, error: licenseError } = await ctx.supabase
-        .from("company_admin_licenses")
-        .select("id")
-        .eq("company_id", targetCompanyId)
-        .eq("user_id", callerId)
-        .eq("status", "active")
-        .lte("starts_on", today)
-        .gte("expires_on", today)
-        .limit(1)
-        .maybeSingle();
-      if (licenseError) return json({ error: licenseError.message }, 400);
-      if (!license) return json({ error: "A licença desta conta de administrador não está ativa. Contacte o Super Admin." }, 403);
-    }
+  const { data: profile } = await admin.from("profiles").select("is_super_admin").eq("user_id", caller.id).maybeSingle();
+  const isSuperAdmin = Boolean(profile?.is_super_admin);
 
-    let targetUser: any = null;
-    let invited = false;
-    const { data: inviteData, error: inviteError } = await ctx.supabaseAdmin.auth.admin.inviteUserByEmail(email, { data: fullName ? { full_name: fullName } : undefined });
-    if (!inviteError && inviteData?.user) { targetUser = inviteData.user; invited = true; }
-    else {
-      try { targetUser = await findExistingUserByEmail(ctx.supabaseAdmin, email); }
-      catch (error: any) { return json({ error: error.message || "Não foi possível procurar o utilizador." }, 400); }
-      if (!targetUser) return json({ error: inviteError?.message || "Não foi possível convidar o utilizador." }, 400);
+  let targetCompanyId = companyId;
+  if (condominiumId) {
+    const { data: condo } = await admin.from("condominiums").select("id,company_id").eq("id", condominiumId).maybeSingle();
+    if (!condo) return json({ error: "Condomínio não encontrado." }, 404);
+    if (companyId && companyId !== condo.company_id) return json({ error: "O condomínio não pertence à empresa indicada." }, 400);
+    targetCompanyId = condo.company_id;
+  }
+  if (!targetCompanyId) return json({ error: "Empresa gestora não encontrada." }, 400);
+
+  if (!isSuperAdmin) {
+    const { data: membership } = await admin
+      .from("company_members")
+      .select("role,status")
+      .eq("company_id", targetCompanyId)
+      .eq("user_id", caller.id)
+      .eq("status", "active")
+      .maybeSingle();
+
+    if (!membership || membership.role !== "admin") {
+      return json({ error: "Apenas o Administrador da Empresa Gestora pode criar colaboradores." }, 403);
     }
 
-    if (companyId) {
-      const { error } = await ctx.supabaseAdmin.from("company_members").upsert({ company_id: companyId, user_id: targetUser.id, role: companyRole, status: "active" }, { onConflict: "company_id,user_id" });
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: license } = await admin
+      .from("company_admin_licenses")
+      .select("id")
+      .eq("company_id", targetCompanyId)
+      .eq("user_id", caller.id)
+      .eq("status", "active")
+      .lte("starts_on", today)
+      .gte("expires_on", today)
+      .limit(1)
+      .maybeSingle();
+
+    if (!license) return json({ error: "A licença desta conta de administrador não está ativa. Contacte o Super Admin." }, 403);
+  }
+
+  let targetUser: any = null;
+  let created = false;
+  try {
+    targetUser = await findExistingUserByEmail(admin, email);
+  } catch (error: any) {
+    return json({ error: error?.message || "Não foi possível procurar o utilizador." }, 400);
+  }
+
+  if (!targetUser) {
+    if (password.length < 8) return json({ error: "Defina uma password inicial com pelo menos 8 caracteres." }, 400);
+    const { data: createData, error: createError } = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: fullName ? { full_name: fullName } : undefined
+    });
+    if (createError || !createData?.user) {
+      return json({ error: createError?.message || "Não foi possível criar o utilizador." }, 400);
+    }
+    targetUser = createData.user;
+    created = true;
+  } else if (fullName) {
+    await admin.auth.admin.updateUserById(targetUser.id, {
+      user_metadata: { ...(targetUser.user_metadata || {}), full_name: fullName }
+    });
+  }
+
+  if (companyId) {
+    const { error } = await admin.from("company_members").upsert({
+      company_id: companyId,
+      user_id: targetUser.id,
+      role: companyRole,
+      status: "active"
+    }, { onConflict: "company_id,user_id" });
+    if (error) return json({ error: error.message }, 400);
+  }
+
+  if (condominiumId) {
+    let existingQuery = admin.from("condominium_members").select("id").eq("condominium_id", condominiumId).eq("user_id", targetUser.id);
+    existingQuery = fractionId ? existingQuery.eq("fraction_id", fractionId) : existingQuery.is("fraction_id", null);
+    const { data: existing, error: existingError } = await existingQuery.maybeSingle();
+    if (existingError) return json({ error: existingError.message }, 400);
+
+    if (existing?.id) {
+      const { error } = await admin.from("condominium_members").update({ fraction_id: fractionId, member_role: memberRole, status: "active" }).eq("id", existing.id);
+      if (error) return json({ error: error.message }, 400);
+    } else {
+      const { error } = await admin.from("condominium_members").insert({ condominium_id: condominiumId, fraction_id: fractionId, user_id: targetUser.id, member_role: memberRole, status: "active" });
       if (error) return json({ error: error.message }, 400);
     }
+  }
 
-    if (condominiumId) {
-      let existingQuery = ctx.supabaseAdmin.from("condominium_members").select("id").eq("condominium_id", condominiumId).eq("user_id", targetUser.id);
-      existingQuery = fractionId ? existingQuery.eq("fraction_id", fractionId) : existingQuery.is("fraction_id", null);
-      const { data: existing, error: existingError } = await existingQuery.maybeSingle();
-      if (existingError) return json({ error: existingError.message }, 400);
-      if (existing?.id) {
-        const { error } = await ctx.supabaseAdmin.from("condominium_members").update({ fraction_id: fractionId, member_role: memberRole, status: "active" }).eq("id", existing.id);
-        if (error) return json({ error: error.message }, 400);
-      } else {
-        const { error } = await ctx.supabaseAdmin.from("condominium_members").insert({ condominium_id: condominiumId, fraction_id: fractionId, user_id: targetUser.id, member_role: memberRole, status: "active" });
-        if (error) return json({ error: error.message }, 400);
-      }
-    }
-
-    return json({ ok: true, invited, userId: targetUser.id, email, companyId: companyId || null, condominiumId: condominiumId || null });
-  })
-};
+  return json({
+    ok: true,
+    created,
+    existing: !created,
+    userId: targetUser.id,
+    email,
+    companyId: companyId || null,
+    condominiumId: condominiumId || null
+  });
+});

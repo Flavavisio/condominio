@@ -1,4 +1,5 @@
 import * as api from './api.js';
+import * as ui from './mockup-ui.js';
 
 const app = document.querySelector('#app');
 
@@ -21,6 +22,10 @@ const state = {
   obligations: [],
   obligationChecklistItems: [],
   obligationInspections: [],
+  dashboardCompanyId: '',
+  dashboardCondoId: '',
+  residentCondoId: '',
+  searchQuery: '',
   view: 'dashboard',
   condoTab: 'overview',
   selectedCondoId: null,
@@ -146,6 +151,11 @@ function resetWorkspace() {
   state.obligationChecklistItems = [];
   state.obligationInspections = [];
   state.selectedCondoId = null;
+  state.dashboardCompanyId = '';
+  state.dashboardCondoId = '';
+  state.residentCondoId = '';
+  state.searchQuery = '';
+  state.view = 'dashboard';
 }
 
 function flash() {
@@ -229,36 +239,10 @@ function viewSubtitle() {
 }
 
 function shell(content) {
-  const name = state.profile?.full_name || state.user?.email || 'Utilizador';
-  const role = isSuperAdmin() ? 'Super Admin' : isResidentOnly() ? 'Condómino' : 'Gestora';
-  return `
-    <div class="app-shell">
-      <aside class="sidebar">
-        <div class="brand"><div class="brand-mark">CF</div><div><strong>Condomínio Fácil</strong><small>GESTÃO SAAS</small></div></div>
-        <nav>
-          <span class="nav-label">Plataforma</span>
-          ${navItem('dashboard', 'Dashboard', '⌂')}
-          ${isSuperAdmin() ? navItem('companies', 'Empresas gestoras', '▦') : ''}
-          ${navItem('condominiums', 'Condomínios', '▥')}
-          ${!isResidentOnly() ? navItem('operations', 'Ocorrências', '⚒') : ''}
-          ${!isResidentOnly() ? navItem('obligations', 'Obrigações', '◷') : ''}
-        </nav>
-        <div class="sidebar-user">
-          <div class="avatar">${esc(initials(name))}</div>
-          <div><strong>${esc(name)}</strong><small>${esc(role)}</small></div>
-          <button id="logoutBtn" title="Terminar sessão">↗</button>
-        </div>
-      </aside>
-      <main class="main">
-        <header class="topbar">
-          <div><span class="eyebrow blue">${esc(role)}</span><h1>${esc(viewTitle())}</h1><p>${esc(viewSubtitle())}</p></div>
-          <div class="topbar-actions"><div class="connection"><span></span> Supabase ligado</div><button class="icon-btn" id="reloadBtn" title="Atualizar">↻</button></div>
-        </header>
-        ${flash()}
-        ${content}
-      </main>
-    </div>
-    <div id="modalHost"></div>`;
+  return ui.shell(state, content, {
+    resident: isResidentOnly(), superAdmin: isSuperAdmin(),
+    title: state.view === 'condo' ? selectedCondo()?.name : ''
+  });
 }
 
 function kpi(label, value, foot, icon, tone = '') {
@@ -287,37 +271,7 @@ function obligationState(item) {
 }
 
 function dashboardView() {
-  const activeCompanies = state.companies.filter(item => item.status === 'active');
-  const openIssues = state.issues.filter(item => !['resolved', 'closed'].includes(item.status));
-  const urgentIssues = openIssues.filter(item => ['urgent', 'high'].includes(item.priority));
-  const urgentObligations = state.obligations.filter(item => ['overdue', 'urgent'].includes(obligationState(item).key));
-  const mrr = activeCompanies.reduce((sum, item) => sum + Number(item.monthly_fee || 0), 0);
-  const fractions = state.fractions.length || state.condominiums.reduce((sum, item) => sum + Number(item.fractions_count || 0), 0);
-
-  return shell(`
-    <section class="kpi-grid">
-      ${isSuperAdmin() ? kpi('Empresas gestoras', state.companies.length, `${activeCompanies.length} ativas`, '▦') : ''}
-      ${kpi('Condomínios', state.condominiums.length, 'Na sua carteira', '▥')}
-      ${kpi('Frações', fractions, 'Registadas', '▤')}
-      ${kpi('Ocorrências abertas', openIssues.length, `${urgentIssues.length} prioritárias`, '⚒', urgentIssues.length ? 'danger' : '')}
-      ${!isResidentOnly() ? kpi('Obrigações críticas', urgentObligations.length, 'Vencidas ou ≤ 7 dias', '◷', urgentObligations.length ? 'warning-card' : '') : ''}
-      ${isSuperAdmin() ? kpi('MRR SaaS', money(mrr), 'Mensalidades ativas', '€') : ''}
-    </section>
-    ${isSuperAdmin() ? `
-      <section class="command-card">
-        <div><span class="eyebrow">CENTRO DE CONTROLO</span><h2>Backend real ligado ao Supabase.</h2><p>Crie empresas gestoras e condomínios. Os restantes módulos operacionais já persistem na base de dados com RLS.</p></div>
-        <div class="command-actions"><button class="light-btn" data-open="company">＋ Empresa</button><button class="light-btn" data-open="condominium">＋ Condomínio</button></div>
-      </section>` : ''}
-    <section class="two-col">
-      <article class="panel">
-        <div class="panel-head"><div><h2>Precisa de atenção</h2><p>Ocorrências abertas e prazos próximos</p></div></div>
-        ${attentionRows(openIssues, urgentObligations)}
-      </article>
-      <article class="panel">
-        <div class="panel-head"><div><h2>Condomínios</h2><p>Acesso rápido à operação</p></div><button class="text-btn" data-view="condominiums">Ver todos →</button></div>
-        ${condoRows(state.condominiums.slice(0, 7), true)}
-      </article>
-    </section>`);
+  return shell(ui.dashboard(state));
 }
 
 function attentionRows(issues, obligations) {
@@ -375,15 +329,15 @@ function condominiumsView() {
   return shell(`
     <section class="panel">
       <div class="panel-head"><div><h2>Carteira de condomínios</h2><p>Selecione um edifício para entrar no respetivo workspace.</p></div>${canCreate && state.companies.length ? '<button class="primary-btn compact" data-open="condominium">＋ Novo condomínio</button>' : ''}</div>
-      ${condoRows(state.condominiums)}
+      ${condoRows(ui.scopedCondos(state))}
     </section>`);
 }
 
 function operationsView() {
-  const issues = state.issues.filter(item => !['resolved', 'closed'].includes(item.status));
+  const issues = ui.scopedItems(state,'issues');
   return shell(`
     <section class="panel">
-      <div class="panel-head"><div><h2>Ocorrências da carteira</h2><p>${issues.length} ocorrência(s) por resolver.</p></div></div>
+      <div class="panel-head"><div><h2>Ocorrências da carteira</h2><p>${issues.length} ocorrência(s).</p></div></div>
       ${issues.length ? `<div class="issue-grid">${issues.map(issueCard).join('')}</div>` : empty('Não existem ocorrências abertas.')}
     </section>`);
 }
@@ -431,6 +385,7 @@ function condoView() {
       ${condoTab('fractions', 'Frações')}
       ${condoTab('issues', 'Ocorrências')}
       ${condoTab('notices', 'Avisos')}
+      ${condoTab('documents', 'Documentos')}
       ${canWork ? condoTab('suppliers', 'Fornecedores') : ''}
       ${canWork ? condoTab('equipment', 'Equipamentos') : ''}
       ${canWork ? condoTab('maintenance', 'Manutenção') : ''}
@@ -446,6 +401,7 @@ function condoTab(id, label) {
 function condoTabContent(condo, canWork) {
   if (state.condoTab === 'fractions') return fractionsTab(condo, canWork);
   if (state.condoTab === 'issues') return issuesTab(condo, canWork);
+  if (state.condoTab === 'documents') return `<section class="panel"><div class="panel-head"><h2>Documentos</h2></div>${state.documents.filter(d=>d.condominium_id===condo.id).map(d=>`<button class="data-row row-button" data-document="${esc(d.id)}">${ui.icon('document')}<strong>${esc(d.name)}</strong>${ui.icon('chevron')}</button>`).join('')||empty('Sem documentos publicados.')}</section>`;
   if (state.condoTab === 'notices') return noticesTab(condo, canWork);
   if (state.condoTab === 'suppliers') return suppliersTab(condo, canWork);
   if (state.condoTab === 'equipment') return equipmentTab(condo, canWork);
@@ -662,15 +618,79 @@ async function submitEntity(event, type) {
 }
 
 function residentDashboard() {
-  const memberships = state.condominiumMembers.filter(item => item.user_id === state.user.id && item.status === 'active');
-  const condoIds = memberships.map(item => item.condominium_id);
-  const notices = state.notices.filter(item => condoIds.includes(item.condominium_id));
-  const issues = state.issues.filter(item => condoIds.includes(item.condominium_id));
-  return shell(`
-    <section class="resident-hero"><span class="eyebrow">ÁREA DO CONDÓMINO</span><h2>O seu condomínio num só lugar.</h2><p>Acompanhe avisos e ocorrências das áreas comuns.</p></section>
-    <section class="two-col"><article class="panel"><div class="panel-head"><div><h2>Os meus condomínios</h2><p>${memberships.length} acesso(s)</p></div></div>${condoRows(state.condominiums.filter(c=>condoIds.includes(c.id)))}</article>
-    <article class="panel"><div class="panel-head"><div><h2>Avisos recentes</h2></div></div>${notices.length ? `<div class="notice-list">${notices.slice(0,5).map(item=>`<article class="notice-card ${item.important?'important':''}"><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p><footer>${esc(condoName(item.condominium_id))} · ${dateTime(item.published_at)}</footer></article>`).join('')}</div>` : empty('Sem avisos recentes.')}</article></section>
-    <section class="panel"><div class="panel-head"><div><h2>Ocorrências visíveis</h2></div></div>${issues.length ? `<div class="issue-grid">${issues.slice(0,8).map(issueCard).join('')}</div>` : empty('Sem ocorrências visíveis.')}</section>`);
+  return shell(ui.resident(state));
+}
+
+function goToView(view) {
+  state.view = view;
+  state.error = ''; state.info = '';
+  render();
+}
+
+function chooseCondoFor(type) {
+  const available = ui.scopedCondos(state);
+  const preferred = available.find(c => c.id === state.residentCondoId || c.id === state.dashboardCondoId);
+  if (preferred || available.length === 1) {
+    state.selectedCondoId = (preferred || available[0]).id;
+    openModal(type);
+    return;
+  }
+  const host = document.querySelector('#modalHost');
+  host.innerHTML = modalShell('Selecionar condomínio', 'NOVA OCORRÊNCIA', available.length
+    ? `<div class="form-grid">${available.map(c => `<button type="button" class="ghost-btn" data-pick-condo="${esc(c.id)}">${esc(c.name)}</button>`).join('')}</div>`
+    : '<p class="cf-empty">Ainda não tem condomínios disponíveis.</p>');
+  host.querySelector('[data-close]').onclick = closeModal;
+  host.querySelectorAll('[data-pick-condo]').forEach(btn => btn.onclick = () => {
+    state.selectedCondoId = btn.dataset.pickCondo; openModal(type);
+  });
+}
+
+async function openDocument(id) {
+  const item = state.documents.find(d => d.id === id);
+  if (!item) return;
+  const host = document.querySelector('#modalHost');
+  let fileLink = '';
+  // Only allow explicit web URLs; storage paths need the existing document's bucket configuration.
+  try { const url = new URL(item.file_path); if (['https:', 'http:'].includes(url.protocol)) fileLink = `<a class="primary-btn" href="${esc(url.href)}" target="_blank" rel="noopener noreferrer">Abrir documento</a>`; } catch {}
+  host.innerHTML = modalShell(item.name, 'DOCUMENTO', `<div class="form-grid"><p class="wide">${esc(condoName(item.condominium_id))} · ${esc(item.category)} · ${date(item.document_date || item.created_at)}</p>${fileLink || '<p class="wide">Não existe uma ligação de ficheiro disponível para este documento.</p>'}</div>`);
+  host.querySelector('[data-close]').onclick = closeModal;
+}
+
+function collectionView() {
+  const title = ui.labels[state.view] || 'Visão geral';
+  const condos = ui.scopedCondos(state);
+  const header = `<div class="cf-form-line"><select id="condoFilter" class="cf-list-filter" aria-label="Filtrar condomínio"><option value="">Todos os condomínios</option>${state.condominiums.filter(c=>!state.dashboardCompanyId || c.company_id === state.dashboardCompanyId).map(c=>`<option value="${esc(c.id)}" ${c.id===state.dashboardCondoId?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div>`;
+  let content = '';
+  if (state.view === 'agenda') content = `<section class="panel"><div class="panel-head"><h2>Agenda</h2></div>${ui.agenda(state,100)}</section>`;
+  if (['fractions','maintenance','notices','suppliers'].includes(state.view)) {
+    const renderTab = {fractions:fractionsTab,maintenance:maintenanceTab,notices:noticesTab,suppliers:suppliersTab}[state.view];
+    content = condos.map(c=>`<div class="cf-collection-group" data-collection-condo="${esc(c.id)}"><h2 class="cf-group-title">${esc(c.name)}</h2>${renderTab(c,canWorkCompany(c.company_id))}</div>`).join('') || `<section class="panel">${empty('Ainda não existem condomínios disponíveis.')}</section>`;
+  }
+  if (state.view === 'documents') {
+    const items = ui.scopedItems(state,'documents');
+    content = `<section class="panel"><div class="panel-head"><h2>Documentos</h2></div>${items.length ? `<div class="rows">${items.map(d=>`<button class="data-row row-button" data-document="${esc(d.id)}"><div class="cf-square-icon blue">${ui.icon('document')}</div><div><strong>${esc(d.name)}</strong><small>${esc(condoName(d.condominium_id))} · ${esc(d.category)}</small></div>${ui.icon('chevron')}</button>`).join('')}</div>` : empty('Sem documentos publicados.')}</section>`;
+  }
+  if (['assemblies','votes','reservations'].includes(state.view)) content = `<section class="panel"><div class="panel-head"><h2>${title}</h2></div><p class="cf-empty">Este módulo ainda não está disponível na plataforma.</p></section>`;
+  if (state.view === 'reports') {
+    const issues = ui.scopedItems(state,'issues');
+    content = `<section class="panel"><div class="panel-head"><h2>Relatório de ocorrências</h2><button class="primary-btn" id="exportReport">Exportar CSV</button></div><div class="table-wrap"><table><thead><tr><th>Condomínio</th><th>Ocorrência</th><th>Estado</th></tr></thead><tbody>${issues.map(i=>`<tr><td>${esc(condoName(i.condominium_id))}</td><td>${esc(i.title)}</td><td>${esc(ui.issueLabel(i.status))}</td></tr>`).join('')}</tbody></table></div>${!issues.length?'<p class="cf-empty">Sem ocorrências para apresentar.</p>':''}</section>`;
+  }
+  return shell(header+content);
+}
+
+function settingsView() {
+  return shell(`<section class="panel"><div class="panel-head"><h2>Configurações</h2></div><div class="cf-settings-grid"><button class="ghost-btn" data-view="profile">Perfil</button><button class="ghost-btn" id="reloadBtn">Atualizar dados</button><button class="ghost-btn" data-view="obligations">Obrigações</button></div><div id="settingsTools" class="cf-settings-tools">${isSuperAdmin() ? navItem('companies', 'Empresas gestoras', '▦') : ''}</div><div class="cf-settings-license"></div></section>`);
+}
+
+function profileView() {
+  return shell(`<section class="panel"><div class="panel-head"><h2>Perfil</h2></div><p>${esc(state.profile?.full_name || 'Utilizador')}</p><p>${esc(state.user?.email || '')}</p><button class="ghost-btn" id="logoutBtn">Terminar sessão</button></section>`);
+}
+
+function searchView() {
+  const term=state.searchQuery.trim().toLocaleLowerCase('pt-PT');
+  const condos=ui.scopedCondos(state).filter(c=>`${c.name} ${c.address||''}`.toLocaleLowerCase('pt-PT').includes(term));
+  const issues=ui.scopedItems(state,'issues').filter(i=>`${i.title} ${i.description||''}`.toLocaleLowerCase('pt-PT').includes(term));
+  return shell(`<section class="panel"><div class="panel-head"><h2>Resultados para “${esc(state.searchQuery)}”</h2></div>${condos.length?condoRows(condos):''}${issues.length?`<div class="issue-grid">${issues.map(issueCard).join('')}</div>`:''}${!condos.length&&!issues.length?empty('Não foram encontrados resultados.'):''}</section>`);
 }
 
 function bind() {
@@ -706,7 +726,8 @@ function bind() {
   document.querySelector('#refreshAccess')?.addEventListener('click', () => loadContext());
   document.querySelector('#reloadBtn')?.addEventListener('click', () => loadContext());
 
-  document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => {
+  document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', event => {
+    event.preventDefault();
     state.view = button.dataset.view;
     state.error = ''; state.info = ''; render();
   }));
@@ -723,7 +744,31 @@ function bind() {
     render();
   }));
 
-  document.querySelectorAll('[data-open]').forEach(button => button.addEventListener('click', () => openModal(button.dataset.open)));
+  document.querySelectorAll('[data-open]').forEach(button => button.addEventListener('click', () => {
+    const collectionCondo = button.closest('[data-collection-condo]')?.dataset.collectionCondo;
+    if (collectionCondo) state.selectedCondoId = collectionCondo;
+    openModal(button.dataset.open);
+  }));
+  document.querySelector('#companyFilter')?.addEventListener('change', event => { state.dashboardCompanyId=event.target.value; state.dashboardCondoId='';render(); });
+  document.querySelector('#condoFilter')?.addEventListener('change', event => { state.dashboardCondoId=event.target.value;render(); });
+  document.querySelector('#residentCondo')?.addEventListener('change', event => { state.residentCondoId=event.target.value;state.dashboardCondoId=event.target.value;render(); });
+  document.querySelectorAll('[data-new-issue]').forEach(btn=>btn.addEventListener('click',()=>{
+    if(btn.dataset.residentCondo) state.residentCondoId=btn.dataset.residentCondo;
+    chooseCondoFor('issue');
+  }));
+  document.querySelectorAll('[data-resident-route]').forEach(btn=>btn.addEventListener('click',()=>{
+    state.dashboardCondoId=btn.dataset.residentCondo; goToView(btn.dataset.residentRoute);
+  }));
+  document.querySelectorAll('[data-document]').forEach(btn=>btn.addEventListener('click',()=>openDocument(btn.dataset.document)));
+  document.querySelector('#globalSearch')?.addEventListener('submit',event=>{event.preventDefault();state.searchQuery=new FormData(event.target).get('q').trim();if(state.searchQuery) goToView('search');});
+  document.querySelector('#menuToggle')?.addEventListener('click',event=>{const open=document.querySelector('.mockup-shell').classList.toggle('cf-menu-open');event.currentTarget.setAttribute('aria-expanded',String(open));});
+  document.querySelector('#closeSidebar')?.addEventListener('click',()=>{document.querySelector('.mockup-shell').classList.remove('cf-menu-open');document.querySelector('#menuToggle')?.setAttribute('aria-expanded','false');});
+  document.querySelector('#exportReport')?.addEventListener('click',()=>{
+    const cell=value=>'"'+String(value??'').replace(/^[=+@-]/,"'$&").replaceAll('"','""')+'"';
+    const rows=[['Condomínio','Ocorrência','Estado'],...ui.scopedItems(state,'issues').map(i=>[condoName(i.condominium_id),i.title,ui.issueLabel(i.status)])];
+    const url=URL.createObjectURL(new Blob(['\ufeff'+rows.map(r=>r.map(cell).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}));
+    const a=document.createElement('a');a.href=url;a.download='ocorrencias.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  });
 }
 
 function render() {
@@ -735,6 +780,10 @@ function render() {
   if (!state.user) app.innerHTML = authView();
   else if (!hasAnyAccess()) app.innerHTML = pendingView();
   else if (isResidentOnly() && state.view === 'dashboard') app.innerHTML = residentDashboard();
+  else if (state.view === 'settings') app.innerHTML = settingsView();
+  else if (state.view === 'profile') app.innerHTML = profileView();
+  else if (state.view === 'search') app.innerHTML = searchView();
+  else if (['fractions','maintenance','assemblies','votes','documents','notices','reservations','suppliers','reports','agenda'].includes(state.view)) app.innerHTML = collectionView();
   else if (state.view === 'companies') app.innerHTML = companiesView();
   else if (state.view === 'condominiums') app.innerHTML = condominiumsView();
   else if (state.view === 'operations') app.innerHTML = operationsView();

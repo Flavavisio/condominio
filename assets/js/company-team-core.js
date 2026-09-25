@@ -69,7 +69,7 @@ async function resolveContext() {
 }
 
 function ensureTeamNav() {
-  const nav = document.querySelector('.sidebar nav');
+  const nav = document.querySelector('.mockup-shell') ? document.querySelector('#settingsTools') : document.querySelector('.sidebar nav');
   if (!nav) return;
   if (!company || !membership) {
     nav.querySelector('.cf-team-core-nav')?.remove();

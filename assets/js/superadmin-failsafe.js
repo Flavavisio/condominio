@@ -116,10 +116,10 @@ async function enhanceCompanies(){
 function ensureNav(){
   if(!isSuperScreen()) return;
   document.querySelector('.cf-license-gate')?.remove();
-  const nav=document.querySelector('.sidebar nav'); if(!nav) return;
+  const nav=document.querySelector('.mockup-shell') ? document.querySelector('#settingsTools') : document.querySelector('.sidebar nav'); if(!nav) return;
   const companies=[...nav.querySelectorAll('.nav-item')].find(b=>b.textContent.includes('Empresas gestoras'));
-  if(!nav.querySelector('[data-sa-users-nav]')){const b=document.createElement('button');b.type='button';b.className='nav-item';b.dataset.saUsersNav='1';b.innerHTML='<span>◎</span>Utilizadores';b.addEventListener('click',openUsers);if(companies?.nextSibling)nav.insertBefore(b,companies.nextSibling);else nav.appendChild(b);}
-  if(!nav.querySelector('[data-sa-licenses-nav]')){const b=document.createElement('button');b.type='button';b.className='nav-item';b.dataset.saLicensesNav='1';b.innerHTML='<span>◇</span>Licenças';b.addEventListener('click',()=>openLicenses());const users=nav.querySelector('[data-sa-users-nav]');if(users?.nextSibling)nav.insertBefore(b,users.nextSibling);else nav.appendChild(b);}
+  if(!nav.querySelector('[data-sa-users-nav], .admin-users-nav')){const b=document.createElement('button');b.type='button';b.className='nav-item';b.dataset.saUsersNav='1';b.innerHTML='<span>◎</span>Utilizadores';b.addEventListener('click',openUsers);if(companies?.nextSibling)nav.insertBefore(b,companies.nextSibling);else nav.appendChild(b);}
+  if(!nav.querySelector('[data-sa-licenses-nav], .cf-license-nav-authority, .cf-license-nav')){const b=document.createElement('button');b.type='button';b.className='nav-item';b.dataset.saLicensesNav='1';b.innerHTML='<span>◇</span>Licenças';b.addEventListener('click',()=>openLicenses());const users=nav.querySelector('[data-sa-users-nav]');if(users?.nextSibling)nav.insertBefore(b,users.nextSibling);else nav.appendChild(b);}
 }
 
 async function tick(){

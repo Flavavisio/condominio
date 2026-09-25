@@ -56,13 +56,13 @@ async function resolveIdentity() {
 }
 
 function injectSuperAdminNav() {
-  const nav = document.querySelector('.sidebar nav');
+  const nav = document.querySelector('.mockup-shell') ? document.querySelector('#settingsTools') : document.querySelector('.sidebar nav');
   if (!nav) return;
   if (!access?.is_super_admin) {
     nav.querySelector('.cf-license-nav')?.remove();
     return;
   }
-  if (nav.querySelector('.cf-license-nav')) return;
+  if (nav.querySelector('.cf-license-nav, .cf-license-nav-authority')) return;
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'nav-item cf-license-nav';
@@ -73,6 +73,7 @@ function injectSuperAdminNav() {
 }
 
 async function injectAdminLicenseBanner() {
+  if (document.querySelector('.mockup-shell') && !document.querySelector('.cf-settings-license')) return;
   if (document.querySelector('.cf-license-banner')) return;
   if (!currentUser || access?.is_super_admin || !currentAdminCompany) return;
   const { data } = await supabase.from('company_admin_licenses').select('id,billing_cycle,starts_on,expires_on,status,license_key').eq('company_id', currentAdminCompany).eq('user_id', currentUser.id).order('created_at',{ascending:false}).limit(1);
@@ -84,7 +85,8 @@ async function injectAdminLicenseBanner() {
   const banner = document.createElement('div');
   banner.className = `cf-license-banner ${state.key}`;
   banner.innerHTML = license ? `<div><strong>Licença ${esc(state.label)}</strong><span>${license.billing_cycle === 'annual' ? 'Anual' : 'Mensal'} · válida até ${fmt(license.expires_on)}</span></div><b>${esc(license.license_key)}</b>` : `<div><strong>Sem licença ativa</strong><span>O Super Admin precisa de emitir uma licença mensal ou anual para esta conta de administrador.</span></div><b>ACESSO ADMINISTRATIVO BLOQUEADO</b>`;
-  topbar.insertAdjacentElement('afterend', banner);
+  const settings = document.querySelector('.cf-settings-license');
+  if (settings) settings.append(banner); else topbar.insertAdjacentElement('afterend', banner);
 }
 
 async function loadLicenseData() {

@@ -84,6 +84,7 @@ async function loadBrandCompany() {
 }
 
 function applyBranding() {
+  if (document.querySelector('.mockup-shell')) return;
   if (!brandedCompany || access?.is_super_admin) return;
   const brandColor = brandedCompany.brand_color || '#3768f5';
   document.documentElement.style.setProperty('--primary', brandColor);
@@ -134,8 +135,8 @@ async function updatePendingBadge() {
 
 function injectUsersNav() {
   if (!access?.is_super_admin) return;
-  const nav = document.querySelector('.sidebar nav');
-  if (!nav || nav.querySelector('.admin-users-nav')) return;
+  const nav = document.querySelector('.mockup-shell') ? document.querySelector('#settingsTools') : document.querySelector('.sidebar nav');
+  if (!nav || nav.querySelector('.admin-users-nav, [data-sa-users-nav]')) return;
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'nav-item admin-users-nav';

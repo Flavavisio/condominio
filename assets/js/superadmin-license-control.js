@@ -188,9 +188,10 @@ async function openLicenses(companyId = null) {
 function ensureNav() {
   if (!isSuper()) return;
   document.querySelector('.cf-license-gate')?.remove();
-  const nav = document.querySelector('.sidebar nav');
+  const nav = document.querySelector('.mockup-shell') ? document.querySelector('#settingsTools') : document.querySelector('.sidebar nav');
   if (!nav) return;
-  nav.querySelectorAll('.cf-license-nav, .cf-license-nav-authority').forEach(btn => btn.remove());
+  nav.querySelectorAll('.cf-license-nav, [data-sa-licenses-nav]').forEach(btn => btn.remove());
+  if (nav.querySelector('.cf-license-nav-authority')) return;
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'nav-item cf-license-nav-authority';

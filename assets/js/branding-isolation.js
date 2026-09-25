@@ -45,6 +45,11 @@ function resetBranding() {
 }
 
 function applyCompanyBranding() {
+  if (document.querySelector('.mockup-shell')) {
+    const title = brandedCompany && !access?.is_super_admin ? `${brandedCompany.label || brandedCompany.name} · Condomínio Fácil` : DEFAULTS.title;
+    if (document.title !== title) document.title = title;
+    return;
+  }
   resetBranding();
   if (!brandedCompany || access?.is_super_admin) return;
 

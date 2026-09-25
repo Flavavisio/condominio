@@ -1,3 +1,4 @@
+import { icon } from './mockup-ui.js';
 import { supabase } from './supabase.js';
 
 let registration = null;
@@ -80,7 +81,7 @@ async function loadNotifications() {
 function updateBell() {
   const btn = document.querySelector('.cf-pwa-bell');
   if (!btn) return;
-  btn.innerHTML = `<span>🔔</span>${unread ? `<b>${unread > 99 ? '99+' : unread}</b>` : ''}`;
+  btn.innerHTML = `<span>${icon('bell')}</span>${unread ? `<b>${unread > 99 ? '99+' : unread}</b>` : ''}`;
   btn.title = Notification.permission === 'granted' ? 'Notificações' : 'Ativar notificações';
 }
 

@@ -333,6 +333,7 @@ async function showServices() {
 }
 
 function injectServicesTab() {
+  if(document.querySelector('.cf-resident-shell')) return;
   const nav = document.querySelector('.module-tabs');
   if (!nav || nav.querySelector('.cf-services-tab')) return;
   const btn = document.createElement('button');

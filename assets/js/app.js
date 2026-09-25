@@ -2,9 +2,11 @@ import * as api from './api.js';
 import * as ui from './mockup-ui.js';
 import * as governance from './governance.js';
 import * as residents from './residents.js';
+import {mountResidentFinance} from './payment-proofs.js';
 import * as reports from './reports.js';
 
 const app = document.querySelector('#app');
+let initialRoute=new URLSearchParams(window.location.search);
 
 const state = {
   session: null,
@@ -130,6 +132,12 @@ async function loadContext({ keepView = true } = {}) {
       state.view = 'dashboard';
     }
     if (!keepView) state.view = 'dashboard';
+    if(initialRoute?.get('condo') && state.condominiums.some(c=>c.id===initialRoute.get('condo'))){
+      state.selectedCondoId=initialRoute.get('condo');state.residentCondoId=state.selectedCondoId;
+      state.condoTab=initialRoute.get('tab')||'overview';
+      if(isResidentOnly()&&state.condoTab==='finance')state.condoTab='resident-finance';
+      state.view='condo';initialRoute=null;
+    }
   } catch (error) {
     state.error = error.message;
   } finally {
@@ -344,7 +352,7 @@ function operationsView() {
   const issues = ui.scopedItems(state,'issues');
   return shell(`
     <section class="panel">
-      <div class="panel-head"><div><h2>Ocorrências da carteira</h2><p>${issues.length} ocorrência(s).</p></div></div>
+      <div class="panel-head"><div><h2>${isResidentOnly()?'Ocorrências do condomínio':'Ocorrências da carteira'}</h2><p>${issues.length} ocorrência(s).</p></div>${isResidentOnly()?'<button class="primary-btn compact" data-new-issue>Reportar ocorrência</button>':''}</div>
       ${issues.length ? `<div class="issue-grid">${issues.map(issueCard).join('')}</div>` : empty('Não existem ocorrências abertas.')}
     </section>`);
 }
@@ -382,21 +390,22 @@ function condoView() {
   const company = companyFor(condo);
   const canWork = canWorkCompany(condo.company_id) || isSuperAdmin();
   return shell(`
-    <section class="condo-hero" style="--condo-brand:${esc(company?.brand_color || '#3768f5')}">
+    <section class="condo-hero" data-condominium-id="${esc(condo.id)}" data-initial-finance="${state.condoTab==='finance'}" style="--condo-brand:${esc(company?.brand_color || '#3768f5')}">
       <div class="condo-brand-mark">${esc(initials(company?.label || company?.name || condo.name))}</div>
       <div><span class="eyebrow">${esc(company?.label || company?.name || 'Gestora')}</span><h2>${esc(condo.name)}</h2><p>${esc([condo.address, condo.postal_code, condo.city].filter(Boolean).join(' · ') || 'Morada por preencher')}</p></div>
       <div class="condo-hero-side">${statusPill(condo.status, condo.status === 'active' ? 'Ativo' : condo.status)}<small>${state.fractions.filter(item => item.condominium_id === condo.id).length || condo.fractions_count || 0} frações</small></div>
     </section>
     <nav class="module-tabs">
       ${condoTab('overview', 'Resumo')}
-      ${condoTab('fractions', 'Frações')}
+      ${isResidentOnly()?'':condoTab('fractions', 'Frações')}
       ${condoTab('issues', 'Ocorrências')}
       ${condoTab('notices', 'Avisos')}
-      ${condoTab('documents', 'Documentos')}
+      ${isResidentOnly()?'':condoTab('documents', 'Documentos')}
       ${canWork ? condoTab('suppliers', 'Fornecedores') : ''}
       ${canWork ? condoTab('equipment', 'Equipamentos') : ''}
       ${canWork ? condoTab('maintenance', 'Manutenção') : ''}
       ${canWork ? condoTab('obligations', 'Obrigações') : ''}
+      ${isResidentOnly()?condoTab('resident-finance','Financeiro'):''}
       ${condoTab('assemblies', 'Assembleias')}
       ${condoTab('votes', 'Votações')}
     </nav>
@@ -408,6 +417,8 @@ function condoTab(id, label) {
 }
 
 function condoTabContent(condo, canWork) {
+  if (isResidentOnly() && state.condoTab==='overview') return ui.resident({...state,residentCondoId:condo.id});
+  if (isResidentOnly() && state.condoTab==='resident-finance') return '<div id="residentFinance"></div>';
   if (['assemblies','votes'].includes(state.condoTab)) return governance.collection({...state,dashboardCompanyId:'',dashboardCondoId:condo.id},state.condoTab);
   if (state.condoTab === 'fractions') return fractionsTab(condo, canWork);
   if (state.condoTab === 'issues') return issuesTab(condo, canWork);
@@ -705,6 +716,8 @@ function searchView() {
 }
 
 function bind() {
+  const residentFinanceHost=document.querySelector('#residentFinance');
+  if(residentFinanceHost&&isResidentOnly()) mountResidentFinance(residentFinanceHost,state);
   reports.bind(state,{rerender:render});
   residents.bind(state,{modalShell,closeModal,reload:loadContext});
   governance.bind(state,{reload:loadContext,modalShell,closeModal,condominiumId:state.view==='condo'?state.selectedCondoId:null});
@@ -783,6 +796,10 @@ function bind() {
 }
 
 function render() {
+  if (state.user && isResidentOnly()) {
+    if (!['dashboard','operations','notices','assemblies','votes','resident-finance','condo','profile'].includes(state.view)) state.view='dashboard';
+    if (!['overview','issues','notices','assemblies','votes','resident-finance'].includes(state.condoTab)) state.condoTab='overview';
+  }
   if (isSuperAdmin() && !['dashboard','companies','settings','profile'].includes(state.view)) state.view='dashboard';
   if (state.loading) {
     app.innerHTML = '<div class="boot-screen"><div class="boot-mark">C</div><strong>Condomia</strong><span>A sincronizar com Supabase…</span></div>';
@@ -792,6 +809,7 @@ function render() {
   if (!state.user) app.innerHTML = authView();
   else if (!hasAnyAccess()) app.innerHTML = pendingView();
   else if (isResidentOnly() && state.view === 'dashboard') app.innerHTML = residentDashboard();
+  else if (isResidentOnly() && state.view === 'resident-finance') app.innerHTML = shell('<div id="residentFinance"></div>');
   else if (state.view === 'settings') app.innerHTML = settingsView();
   else if (state.view === 'profile') app.innerHTML = profileView();
   else if (state.view === 'search') app.innerHTML = searchView();

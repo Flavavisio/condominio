@@ -1,0 +1,64 @@
+import {supabase} from './supabase.js';
+import {escapeHtml as esc} from './mockup-ui.js';
+const cents=n=>Math.round(Number(n||0)*100);
+const money=n=>(n/100).toLocaleString('pt-PT',{style:'currency',currency:'EUR'});
+const date=d=>d?new Date(`${String(d).slice(0,10)}T12:00:00`).toLocaleDateString('pt-PT'):'—';
+const period=c=>c?`${c.period_month?new Date(c.period_year,c.period_month-1,1).toLocaleDateString('pt-PT',{month:'long'}):'Anual'} ${c.period_year}`:'—';
+const status=p=>({pending:'A aguardar validação',approved:'Pagamento validado',rejected:'Rejeitado'}[p.status]||p.status);
+export async function allRows(table,key,value,select='*'){
+ const result=[];
+ for(let start=0;;start+=1000){const {data,error}=await supabase.from(table).select(select).eq(key,value).order('id').range(start,start+999);if(error)throw error;result.push(...data);if(data.length<1000)return result;}
+}
+function dialog(title,body){
+ const root=document.createElement('div');root.className='cf-fin-modal-backdrop';root.innerHTML=`<div class="cf-fin-modal" role="dialog" aria-modal="true" aria-label="${esc(title)}"><header><div><span>FINANCEIRO</span><h2>${esc(title)}</h2></div><button type="button" data-proof-close aria-label="Fechar">✕</button></header>${body}<p class="cp-error" role="alert" data-proof-error></p></div>`;
+ document.body.append(root);root.querySelectorAll('[data-proof-close]').forEach(b=>b.onclick=()=>root.remove());return root;
+}
+async function openFile(proof,host){
+ const popup=window.open('','_blank');if(popup)popup.opener=null;
+ try{const {data,error}=await supabase.storage.from('payment-proofs').createSignedUrl(proof.file_path,120);if(error)throw error;if(popup)popup.location.href=data.signedUrl;else throw new Error('Permita a abertura do comprovativo numa nova janela.');}
+ catch(err){popup?.close();host.querySelector('[data-proof-error]').textContent=err.message;}
+}
+function uploadProof(charge,remaining,user,reload){
+ const root=dialog('Enviar comprovativo',`<form id="paymentProofForm" class="cf-fin-form"><p class="wide">${esc(charge.description)} · ${esc(period(charge))}<br>Por liquidar: <strong>${money(remaining)}</strong>. O pagamento só fica registado após validação da gestora.</p><label>Valor pago (€)<input name="amount" type="number" required min="0.01" max="${remaining/100}" step="0.01" value="${remaining/100}"></label><label>Data do pagamento<input type="date" name="paid_on" required max="${new Date().toLocaleDateString('en-CA')}" value="${new Date().toLocaleDateString('en-CA')}"></label><label class="wide">Método<select name="method"><option value="transfer">Transferência</option><option value="mbway">MB WAY</option><option value="direct_debit">Débito direto</option><option value="cash">Numerário</option><option value="card">Cartão</option><option value="other">Outro</option></select></label><label class="wide">Comprovativo (PDF ou imagem, até 10 MB)<input name="file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" required></label><label class="wide">Observações<textarea name="note" maxlength="2000" rows="2"></textarea></label><div class="cf-fin-actions wide"><button type="button" class="ghost-btn" data-proof-close>Cancelar</button><button type="submit" class="primary-btn">Enviar para validação</button></div></form>`);
+ root.querySelector('form').onsubmit=async e=>{e.preventDefault();const button=e.currentTarget.querySelector('[type=submit]'),fd=new FormData(e.currentTarget),file=fd.get('file');let uploaded=null;button.disabled=true;root.querySelector('[data-proof-error]').textContent='';
+ try{
+  const extensions={'application/pdf':'pdf','image/jpeg':'jpg','image/png':'png','image/webp':'webp'};
+  if(!extensions[file.type]||file.size===0||file.size>10485760)throw new Error('Escolha um PDF, JPG, PNG ou WEBP até 10 MB.');
+  const path=`${user.id}/${charge.fraction_id}/${crypto.randomUUID()}.${extensions[file.type]}`;
+  const upload=await supabase.storage.from('payment-proofs').upload(path,file,{contentType:file.type,upsert:false});if(upload.error)throw upload.error;uploaded=path;
+  const {error}=await supabase.from('payment_proofs').insert({condominium_id:charge.condominium_id,fraction_id:charge.fraction_id,charge_id:charge.id,submitted_by:user.id,file_path:path,file_name:file.name.slice(0,255),amount:Number(fd.get('amount')),paid_on:fd.get('paid_on'),method:fd.get('method'),note:String(fd.get('note')||'').trim()});
+  if(error)throw new Error(error.code==='23505'?'Esta quota já tem um comprovativo pendente. Atualize o financeiro.':error.message);
+  root.remove();await reload('Comprovativo enviado. Aguarda validação da gestora.');
+ }catch(err){if(uploaded)await supabase.storage.from('payment-proofs').remove([uploaded]).catch(()=>{});root.querySelector('[data-proof-error]').textContent=err.message;button.disabled=false;}
+ };
+}
+function proofRows(proofs,charges,fractions,manage){
+ return proofs.length?`<div class="table-wrap"><table><thead><tr><th>Fração / período</th><th>Data / valor</th><th>Estado</th><th>Observações</th><th>Comprovativo</th></tr></thead><tbody>${proofs.map(p=>{const c=charges.find(c=>c.id===p.charge_id);return `<tr><td>${esc(fractions.find(f=>f.id===p.fraction_id)?.code||'')} · ${esc(period(c))}<small>${esc(c?.description||'')}</small></td><td>${date(p.paid_on)}<br><strong>${money(cents(p.amount))}</strong></td><td>${esc(status(p))}</td><td>${esc(p.review_note||p.note||'—')}</td><td><button class="ghost-btn compact" data-proof-open="${p.id}">${manage&&p.status==='pending'?'Validar':'Ver comprovativo'}</button></td></tr>`;}).join('')}</tbody></table></div>`:'<p class="cp-muted">Sem comprovativos enviados.</p>';
+}
+function proofDetail(p,charges,manage,reload){
+ const c=charges.find(c=>c.id===p.charge_id);
+ const root=dialog('Comprovativo de pagamento',`<div class="cf-fin-form"><p class="wide">${esc(c?.description||'Quota')} · ${esc(period(c))}<br><strong>${money(cents(p.amount))}</strong> · ${date(p.paid_on)}<br>${esc(status(p))}</p><button class="ghost-btn wide" data-proof-file>Abrir ${esc(p.file_name)}</button><p class="wide">${esc(p.note||'Sem observações.')}${p.review_note?`<br>Decisão: ${esc(p.review_note)}`:''}</p>${manage&&p.status==='pending'?`<form class="wide" id="reviewPaymentProof"><label>Decisão<select name="decision"><option value="approve">Validar e registar pagamento</option><option value="reject">Rejeitar comprovativo</option></select></label><label>Motivo / observações<textarea name="note" maxlength="2000" rows="3"></textarea></label><p>A validação abate este valor à quota indicada. Se cobrir toda a dívida, a quota fica paga.</p><button type="submit" class="primary-btn">Confirmar decisão</button></form>`:''}</div>`);
+ root.querySelector('[data-proof-file]').onclick=()=>openFile(p,root);
+ const form=root.querySelector('form');if(form){form.elements.decision.onchange=()=>form.elements.note.required=form.elements.decision.value==='reject';form.onsubmit=async e=>{e.preventDefault();const b=form.querySelector('[type=submit]');b.disabled=true;try{const {error}=await supabase.rpc('review_payment_proof',{p_proof_id:p.id,p_approve:form.elements.decision.value==='approve',p_note:form.elements.note.value.trim()});if(error)throw error;root.remove();await reload();}catch(err){root.querySelector('[data-proof-error]').textContent=err.message;b.disabled=false;}};}
+}
+export async function mountProofQueue(host,condo,charges,fractions,reload){
+ try{const proofs=(await allRows('payment_proofs','condominium_id',condo.id)).sort((a,b)=>(a.status!=='pending')-(b.status!=='pending')||b.created_at.localeCompare(a.created_at));if(!host.isConnected)return;
+ host.innerHTML=`<div class="panel-head"><div><h2>Comprovativos de pagamento</h2><p>${proofs.filter(p=>p.status==='pending').length} por validar</p></div></div>${proofRows(proofs,charges,fractions,true)}`;
+ host.querySelectorAll('[data-proof-open]').forEach(b=>b.onclick=()=>proofDetail(proofs.find(p=>p.id===b.dataset.proofOpen),charges,true,reload));
+ }catch(err){if(host.isConnected)host.innerHTML=`<p role="alert">${esc(err.message)}</p>`;}
+}
+export async function mountResidentFinance(host,s){
+ const own=new Set(s.condominiumMembers.filter(m=>m.user_id===s.user.id&&m.status==='active').map(m=>m.fraction_id));
+ const fractions=s.fractions.filter(f=>own.has(f.id));let chosen=fractions.find(f=>f.condominium_id===s.residentCondoId)?.id||fractions[0]?.id;let ticket=0;
+ const render=async(message='')=>{const generation=++ticket;host.innerHTML='<section class="panel cp-panel" role="status">A carregar o financeiro da sua fração…</section>';try{
+ const f=fractions.find(f=>f.id===chosen);if(!f){host.innerHTML='<section class="panel cp-panel">Não tem uma fração associada.</section>';return;}
+ const [charges,payments,allocations,proofs]=await Promise.all([allRows('fraction_charges','fraction_id',f.id),allRows('fraction_payments','fraction_id',f.id),allRows('payment_allocations','fraction_charges.fraction_id',f.id,'*,fraction_charges!inner(fraction_id)'),allRows('payment_proofs','fraction_id',f.id)]);
+ if(!host.isConnected||generation!==ticket)return;
+ charges.sort((a,b)=>a.due_date.localeCompare(b.due_date));payments.sort((a,b)=>b.paid_on.localeCompare(a.paid_on));proofs.sort((a,b)=>b.created_at.localeCompare(a.created_at));
+ const paid=id=>allocations.filter(a=>a.charge_id===id).reduce((n,a)=>n+cents(a.amount),0);const left=c=>c.status==='cancelled'?0:Math.max(0,cents(c.amount_due)-paid(c.id));const debt=charges.reduce((n,c)=>n+left(c),0);const pending=c=>proofs.some(p=>p.charge_id===c.id&&p.status==='pending');
+ host.innerHTML=`<section class="panel cp-panel"><div class="panel-head"><div><h2>Financeiro da minha fração</h2><p>Dívidas por mês, pagamentos e comprovativos.</p></div></div><label>Fração<select id="paymentFraction">${fractions.map(f=>`<option value="${f.id}" ${f.id===chosen?'selected':''}>${esc(s.condominiums.find(c=>c.id===f.condominium_id)?.name||'')} · ${esc(f.code)}</option>`).join('')}</select></label>${message?`<p class="flash success" role="status">${esc(message)}</p>`:''}<div class="cr-stats"><div><strong>${money(debt)}</strong><span>Por liquidar</span></div><div><strong>${money(payments.reduce((n,p)=>n+cents(p.amount),0))}</strong><span>Pagamentos registados</span></div><div><strong>${proofs.filter(p=>p.status==='pending').length}</strong><span>Comprovativos por validar</span></div></div><p class="cp-muted">Efetue o pagamento pelos meios indicados pela gestora e envie o comprovativo da quota correspondente. O envio não marca automaticamente a quota como paga.</p><h3>Dívidas e quotas por mês</h3>${charges.length?`<div class="table-wrap"><table><thead><tr><th>Mês / quota</th><th>Vencimento</th><th>Valor</th><th>Pago</th><th>Em dívida</th><th>Pagamento</th></tr></thead><tbody>${charges.map(c=>`<tr><td><strong>${esc(period(c))}</strong><small>${esc(c.description)}</small></td><td>${date(c.due_date)}</td><td>${money(cents(c.amount_due))}</td><td>${money(paid(c.id))}</td><td>${money(left(c))}</td><td>${c.status==='cancelled'?'Anulada':pending(c)?'<span>A aguardar validação</span>':left(c)>0?`<button class="primary-btn compact" data-upload-proof="${c.id}">Enviar comprovativo</button>`:'Pago'}</td></tr>`).join('')}</tbody></table></div>`:'<p class="cp-muted">Sem quotas registadas.</p>'}<h3>Pagamentos efetuados</h3>${payments.length?`<div class="table-wrap"><table><thead><tr><th>Data</th><th>Valor</th><th>Quotas liquidadas</th><th>Referência</th></tr></thead><tbody>${payments.map(p=>`<tr><td>${date(p.paid_on)}</td><td>${money(cents(p.amount))}</td><td>${esc(allocations.filter(a=>a.payment_id===p.id).map(a=>period(charges.find(c=>c.id===a.charge_id))).join(', ')||'Por alocar')}</td><td>${esc(p.reference||'—')}</td></tr>`).join('')}</tbody></table></div>`:'<p class="cp-muted">Sem pagamentos registados.</p>'}<h3>Os meus comprovativos</h3>${proofRows(proofs,charges,fractions,false)}</section>`;
+ host.querySelectorAll('table').forEach(table=>{const headers=[...table.querySelectorAll('th')].map(h=>h.textContent);table.querySelectorAll('tbody tr').forEach(row=>[...row.children].forEach((cell,i)=>cell.dataset.label=headers[i]));});
+ host.querySelector('#paymentFraction').onchange=e=>{chosen=e.target.value;render();};host.querySelectorAll('[data-upload-proof]').forEach(b=>b.onclick=()=>{const c=charges.find(c=>c.id===b.dataset.uploadProof);uploadProof(c,left(c),s.user,render);});host.querySelectorAll('[data-proof-open]').forEach(b=>b.onclick=()=>proofDetail(proofs.find(p=>p.id===b.dataset.proofOpen),charges,false,render));
+ }catch(err){if(host.isConnected&&generation===ticket)host.innerHTML=`<section class="panel cp-panel"><p role="alert">${esc(err.message)}</p><button class="ghost-btn" id="retryResidentFinance">Tentar novamente</button></section>`;host.querySelector('#retryResidentFinance')?.addEventListener('click',()=>render());}};
+ await render();
+}

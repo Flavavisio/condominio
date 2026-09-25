@@ -160,3 +160,11 @@ Em Relatórios é obrigatório selecionar um condomínio e gerar o relatório. S
 O resumo financeiro calcula valores em cêntimos a partir das cobranças e alocações dos pagamentos; exclui cobranças anuladas dos totais de dívida. Não representa despesas ou saldo bancário. O relatório indica a data de geração e abrange todo o histórico acessível, sem misturar condomínios.
 
 Verificações locais: `npm run check`, `node tests/invite-member.test.mjs` e `node tests/reports.test.mjs`.
+
+### Portal do condómino e comprovativos
+
+O condómino tem apenas Resumo, Ocorrências, Avisos, Assembleias, Votações e Financeiro. O botão Pagamento do condomínio abre as quotas por mês, valores em dívida e pagamentos das suas frações. Mesmo um administrador residente só consulta o financeiro das suas próprias frações; a validação financeira pertence à gestora (administrador ou gestor atribuído).
+
+O envio de comprovativos aceita PDF, JPG, PNG e WEBP até 10 MB num bucket privado. Cada comprovativo indica uma quota, data e valor (total ou parcial). Permanece pendente sem liquidar a dívida. A gestora recebe uma notificação e, no Financeiro do condomínio, abre o ficheiro e valida ou rejeita com motivo. A validação regista o pagamento e a alocação na mesma transação; uma quota totalmente liquidada fica paga. Rejeições permitem novo envio. Os ficheiros submetidos não podem ser substituídos pelo condómino e só são abertos através de ligações temporárias autorizadas. Não existe cobrança online: o pagamento é realizado pelos meios indicados pela gestora.
+
+A migração `20260925110943_resident_payment_proofs.sql` restringe as permissões financeiras, cria o armazenamento e a validação, e protege todas as alocações contra valores superiores à dívida/pagamento e cruzamento de frações. `supabase/tests/payment-proofs.sql` verifica o fluxo com dados temporários e rollback. O relatório completo inclui o estado dos comprovativos.

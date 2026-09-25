@@ -8,7 +8,7 @@ const money=v=>(v/100).toLocaleString('pt-PT',{style:'currency',currency:'EUR'})
 const labels={open:'Aberta',partial:'Parcial',paid:'Paga',cancelled:'Cancelada',scheduled:'Agendada',completed:'Concluída',active:'Ativo',inactive:'Inativo',draft:'Rascunho',closed:'Encerrada',published:'Publicada',yes:'A favor',no:'Contra',abstain:'Abstenção',transfer:'Transferência',cash:'Numerário',direct_debit:'Débito direto',card:'Cartão',mbway:'MB WAY',other:'Outro',urgent:'Urgente',high:'Alta',normal:'Normal',low:'Baixa'};
 const label=v=>labels[v]||v||'—';
 let scope='',selected='',data=null,loading=false,error='',generation=0;
-const tables=['fractions','condominium_members','issues','notices','documents','suppliers','equipment','maintenance','obligations','obligation_inspections','assemblies','polls','periodic_services','periodic_service_visits','fraction_charges','fraction_payments','payment_allocations','obligation_checklist_items'];
+const tables=['fractions','condominium_members','issues','notices','documents','suppliers','equipment','maintenance','obligations','obligation_inspections','assemblies','polls','periodic_services','periodic_service_visits','fraction_charges','fraction_payments','payment_allocations','obligation_checklist_items','payment_proofs'];
 export async function loadReport(id){
  const entries=await Promise.all(tables.map(async name=>{
   const rows=[];
@@ -43,6 +43,7 @@ export function reportMarkup(condo,d){
  ${table('Financeiro por fração',['Fração','Emitido','Liquidado','Por liquidar','Em atraso'],total.byFraction.map(x=>[x.fraction.code,money(x.charged),money(x.paid),money(x.outstanding),money(x.overdue)]))}
  ${table('Quotas e cobranças',['Fração','Descrição','Vencimento','Valor','Estado'],d.fraction_charges.map(c=>[fraction(c.fraction_id),c.description,date(c.due_date),money(cents(c.amount_due)),label(c.status)]))}
  ${table('Recebimentos',['Fração','Data','Método','Referência','Valor'],d.fraction_payments.map(p=>[fraction(p.fraction_id),date(p.paid_on),label(p.method),p.reference,money(cents(p.amount))]))}
+ ${table('Comprovativos de pagamento',['Fração','Quota','Data','Valor','Estado','Decisão'],(d.payment_proofs||[]).map(p=>[fraction(p.fraction_id),d.fraction_charges.find(c=>c.id===p.charge_id)?.description,date(p.paid_on),money(cents(p.amount)),({pending:'Por validar',approved:'Validado',rejected:'Rejeitado'})[p.status],p.review_note]))}
  ${table('Frações e acessos',['Fração','Piso','Permilagem','Estado','Contas ativas','Administrador'],d.fractions.map(f=>[f.code,f.floor,f.permillage,label(f.status),members.filter(m=>m.fraction_id===f.id).length,members.some(m=>m.fraction_id===f.id&&m.is_condominium_admin)?'Sim':'Não']))}
  ${table('Ocorrências',['Data','Ocorrência / descrição','Local / fração','Prioridade','Estado','Fornecedor'],d.issues.map(i=>[date(i.created_at),[i.title,i.description,i.review_note].filter(Boolean).join('\n'),[i.place,fraction(i.fraction_id)].filter(Boolean).join(' · '),label(i.priority),issueDisplayLabel(i),supplier(i.supplier_id)]))}
  ${table('Assembleias',['Data','Título / local','Estado','Ordem de trabalhos','Ata'],d.assemblies.map(a=>[a.scheduled_for?new Date(a.scheduled_for).toLocaleString('pt-PT'):'—',[a.title,a.location].filter(Boolean).join('\n'),label(a.status),a.agenda,a.minutes]))}

@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js';
+import {mountProofQueue,allRows} from './payment-proofs.js';
 
 let financeActive = false;
 let financeCondo = null;
@@ -31,6 +32,7 @@ function toast(message, error = false) {
 
 async function getCurrentCondo() {
   const hero = document.querySelector('.condo-hero');
+  if(hero?.dataset.condominiumId){const {data,error}=await supabase.from('condominiums').select('id,name,address,city,company_id').eq('id',hero.dataset.condominiumId).single();if(error)throw error;return data;}
   const name = hero?.querySelector('h2')?.textContent?.trim();
   if (!name) return null;
   const { data, error } = await supabase.from('condominiums').select('id,name,address,city,company_id').eq('name', name);
@@ -86,26 +88,14 @@ async function canManage(condoId) {
 }
 
 async function loadFinanceData(condoId) {
-  const [{ data: fractions, error: fErr }, { data: charges, error: cErr }, { data: payments, error: pErr }] = await Promise.all([
-    supabase.from('fractions').select('id,code,floor,permillage,status').eq('condominium_id', condoId).order('code'),
-    supabase.from('fraction_charges').select('*').eq('condominium_id', condoId).order('due_date', { ascending: false }),
-    supabase.from('fraction_payments').select('*').eq('condominium_id', condoId).order('paid_on', { ascending: false })
+  const [fractions,charges,payments,allocations]=await Promise.all([
+    allRows('fractions','condominium_id',condoId),
+    allRows('fraction_charges','condominium_id',condoId),
+    allRows('fraction_payments','condominium_id',condoId),
+    allRows('payment_allocations','fraction_charges.condominium_id',condoId,'*,fraction_charges!inner(condominium_id)')
   ]);
-  if (fErr) throw fErr;
-  if (cErr) throw cErr;
-  if (pErr) throw pErr;
-  const chargeIds = (charges || []).map(x => x.id);
-  const paymentIds = (payments || []).map(x => x.id);
-  let allocations = [];
-  if (chargeIds.length || paymentIds.length) {
-    let q = supabase.from('payment_allocations').select('*');
-    if (chargeIds.length) q = q.in('charge_id', chargeIds);
-    else q = q.in('payment_id', paymentIds);
-    const { data, error } = await q;
-    if (error) throw error;
-    allocations = data || [];
-  }
-  return { fractions: fractions || [], charges: charges || [], payments: payments || [], allocations };
+  fractions.sort((a,b)=>a.code.localeCompare(b.code));charges.sort((a,b)=>b.due_date.localeCompare(a.due_date));payments.sort((a,b)=>b.paid_on.localeCompare(a.paid_on));
+  return {fractions,charges,payments,allocations};
 }
 
 function chargePaidMap(allocations) {
@@ -271,7 +261,9 @@ async function renderFinance(condo) {
       ${chargesTable(filtered, fractionMap)}
       <div class="cf-fin-section-head payments"><div><h3>Pagamentos recebidos</h3><p>Movimentos registados no período selecionado</p></div></div>
       ${paymentsTable(filtered, fractionMap)}
+      ${financeCanManage?'<section class="cp-proof-queue" id="managerProofQueue"><p>A carregar comprovativos…</p></section>':''}
     </section>`;
+    if(financeCanManage) await mountProofQueue(host.querySelector('#managerProofQueue'),condo,data.charges,data.fractions,()=>renderFinance(condo));
     host.querySelector('[data-fin-bulk]')?.addEventListener('click', () => openBulkCharge(condo, data.fractions));
     host.querySelector('[data-fin-payment]')?.addEventListener('click', () => openPayment(condo, data.fractions));
     const rerender = () => {
@@ -312,6 +304,7 @@ async function showFinance() {
 }
 
 function injectFinanceTab() {
+  if(document.querySelector('.cf-resident-shell')) return;
   const nav = document.querySelector('.module-tabs');
   if (!nav || nav.querySelector('.cf-finance-tab')) return;
   const btn = document.createElement('button');
@@ -319,6 +312,7 @@ function injectFinanceTab() {
   btn.textContent = 'Financeiro';
   btn.addEventListener('click', showFinance);
   nav.insertBefore(btn,nav.querySelector('[data-condo-tab=assemblies]'));
+  if(document.querySelector('.condo-hero')?.dataset.initialFinance==='true') btn.click();
 }
 
 const observer = new MutationObserver(() => injectFinanceTab());

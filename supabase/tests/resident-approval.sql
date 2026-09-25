@@ -11,7 +11,10 @@ begin
  insert into public.company_admin_licenses(company_id,user_id,license_key,billing_cycle,starts_on,expires_on) values(co,gestora,gen_random_uuid()::text,'annual',current_date-1,current_date+366);
  insert into public.condominiums(id,company_id,name) values(condo,co,'Test A'),(other_condo,co,'Test B');
  insert into public.fractions(id,condominium_id,code,permillage) values(fa,condo,'A',250),(fb,condo,'B',250),(fc,condo,'C',250),(fd,other_condo,'D',1000);
+ set local role service_role;
  insert into public.condominium_members(condominium_id,fraction_id,user_id) values(condo,fa,admin_a),(condo,fb,admin_b),(condo,fc,resident),(other_condo,fd,outsider);
+ update public.condominium_members set member_role='owner',status='active' where condominium_id=condo and user_id=resident;
+ reset role;
  perform set_config('request.jwt.claim.sub',gestora::text,true); set local role authenticated;
  perform public.set_condominium_resident_admin(condo,admin_a,true);
  perform public.set_condominium_resident_admin(condo,admin_b,true);
@@ -82,5 +85,5 @@ begin
  reset role;
 end;
 $$;
-select 'PASS: fraction isolation, two-admin limit and replacement, no self-promotion, forced approval queue, management and notification isolation, approval audit, rejection reason, management treatment, independent fraction ballots and duplicate prevention' as test_result;
+select 'PASS: service-role creation and retry, fraction isolation, two-admin limit and replacement, no self-promotion, forced approval queue, management and notification isolation, approval audit, rejection reason, management treatment, independent fraction ballots and duplicate prevention' as test_result;
 rollback;

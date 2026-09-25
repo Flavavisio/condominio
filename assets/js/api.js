@@ -60,7 +60,7 @@ export async function loadWorkspace(userId) {
     supabase.from('company_members').select('id,company_id,user_id,role,status,created_at'),
     supabase.from('condominiums').select('*').order('created_at', { ascending: false }),
     supabase.from('fractions').select('*').order('code'),
-    supabase.from('condominium_members').select('id,condominium_id,fraction_id,user_id,member_role,status,permissions,created_at'),
+    supabase.from('condominium_members').select('id,condominium_id,fraction_id,user_id,member_role,status,permissions,is_condominium_admin,created_at'),
     supabase.from('issues').select('*').order('created_at', { ascending: false }),
     supabase.from('notices').select('*').order('published_at', { ascending: false }),
     supabase.from('notice_reads').select('*').order('read_at', { ascending: false }),
@@ -209,3 +209,15 @@ export const createObligationInspection = values => insert('obligation_inspectio
 export { supabase };
 
 export async function pollResults(id) { return throwIfError(await supabase.rpc('get_poll_results', {target:id})); }
+
+export async function createFractionAccess(values) {
+ const {data,error}=await supabase.functions.invoke('invite-member',{body:values});
+ if(error||data?.error){let message=data?.error||error?.message;try{const body=await error?.context?.json();message=body?.error||body?.message||message;}catch{}throw new Error(message||'Não foi possível criar o acesso.');}
+ return data;
+}
+export async function setResidentAdmin(condominiumId,userId,enabled) {
+ return throwIfError(await supabase.rpc('set_condominium_resident_admin',{p_condominium_id:condominiumId,p_user_id:userId,p_is_admin:enabled}));
+}
+export async function reviewIssue(id,approve,note) {
+ return throwIfError(await supabase.rpc('review_condominium_issue',{p_issue_id:id,p_approve:approve,p_note:note}));
+}

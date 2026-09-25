@@ -80,6 +80,14 @@ Deno.serve(async (req: Request) => {
   }
   if (!targetCompanyId) return json({ error: "Empresa gestora não encontrada." }, 400);
 
+  if (fractionId) {
+    if (!condominiumId) return json({ error: "Indique o condomínio da fração." }, 400);
+    const { data: fraction, error: fractionError } = await admin.from("fractions").select("id,condominium_id,status").eq("id", fractionId).maybeSingle();
+    if (fractionError || !fraction || fraction.condominium_id !== condominiumId || fraction.status !== "active") {
+      return json({ error: "A fração não está ativa neste condomínio." }, 400);
+    }
+  }
+
   if (!isSuperAdmin) {
     const { data: membership } = await admin
       .from("company_members")
@@ -89,21 +97,25 @@ Deno.serve(async (req: Request) => {
       .eq("status", "active")
       .maybeSingle();
 
-    if (!membership || membership.role !== "admin") {
-      return json({ error: "Apenas o Administrador da Empresa Gestora pode criar colaboradores." }, 403);
+    const residentOnly = Boolean(condominiumId && !companyId);
+    if (!membership || (membership.role !== "admin" && !(residentOnly && membership.role === "manager"))) {
+      return json({ error: "Sem permissões para criar este acesso." }, 403);
+    }
+    if (membership.role === "manager") {
+      const { data: assignment } = await admin.from("condominium_staff_assignments").select("id").eq("condominium_id", condominiumId).eq("user_id", caller.id).eq("status", "active").maybeSingle();
+      if (!assignment) return json({ error: "Este condomínio não está atribuído ao gestor." }, 403);
     }
 
     const today = new Date().toISOString().slice(0, 10);
-    const { data: license } = await admin
+    let licenseQuery = admin
       .from("company_admin_licenses")
       .select("id")
       .eq("company_id", targetCompanyId)
-      .eq("user_id", caller.id)
       .eq("status", "active")
       .lte("starts_on", today)
-      .gte("expires_on", today)
-      .limit(1)
-      .maybeSingle();
+      .gte("expires_on", today);
+    if (membership.role === "admin") licenseQuery = licenseQuery.eq("user_id", caller.id);
+    const { data: license } = await licenseQuery.limit(1).maybeSingle();
 
     if (!license) return json({ error: "A licença desta conta de administrador não está ativa. Contacte o Super Admin." }, 403);
   }
@@ -129,11 +141,8 @@ Deno.serve(async (req: Request) => {
     }
     targetUser = createData.user;
     created = true;
-  } else if (fullName) {
-    await admin.auth.admin.updateUserById(targetUser.id, {
-      user_metadata: { ...(targetUser.user_metadata || {}), full_name: fullName }
-    });
   }
+  // Existing accounts keep their identity and password when associated with a fraction.
 
   if (companyId) {
     const { error } = await admin.from("company_members").upsert({

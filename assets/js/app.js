@@ -1,6 +1,8 @@
 import * as api from './api.js';
 import * as ui from './mockup-ui.js';
 import * as governance from './governance.js';
+import * as residents from './residents.js';
+import * as reports from './reports.js';
 
 const app = document.querySelector('#app');
 
@@ -357,10 +359,10 @@ function obligationsView() {
 }
 
 function issueCard(item) {
-  return `<button class="issue-card" data-condo="${item.condominium_id}" data-tab="issues">
+  return `<button class="issue-card" data-issue-detail="${item.id}">
     <div class="issue-card-top"><span class="category-chip">${esc(item.category || 'Ocorrência')}</span>${statusPill(item.priority, item.priority === 'urgent' ? 'Urgente' : item.priority)}</div>
     <h3>${esc(item.title)}</h3><p>${esc(item.description || 'Sem descrição.')}</p>
-    <footer><span>${esc(condoName(item.condominium_id))}</span><span>${dateTime(item.created_at)}</span></footer>
+    <footer><span>${esc(ui.issueDisplayLabel(item))}</span><span>${dateTime(item.created_at)}</span></footer>
   </button>`;
 }
 
@@ -443,14 +445,15 @@ function overviewTab(condo) {
 
 function fractionsTab(condo, canWork) {
   const items = state.fractions.filter(item => item.condominium_id === condo.id);
-  return `<section class="panel"><div class="panel-head"><div><h2>Frações</h2><p>Unidades do condomínio e permilagem.</p></div>${canWork ? '<button class="primary-btn compact" data-open="fraction">＋ Nova fração</button>' : ''}</div>
-    ${items.length ? `<div class="table-wrap"><table><thead><tr><th>Fração</th><th>Piso</th><th>Permilagem</th><th>Estado</th></tr></thead><tbody>${items.map(item => `<tr><td><strong>${esc(item.code)}</strong></td><td>${esc(item.floor || '—')}</td><td>${item.permillage ?? '—'}</td><td>${statusPill(item.status, item.status === 'active' ? 'Ativa' : item.status)}</td></tr>`).join('')}</tbody></table></div>` : empty('Crie ou importe as frações deste condomínio.')}
+  return `<section class="panel"><div class="panel-head"><div><h2>Frações</h2><p>Unidades, acessos e administradores do condomínio.</p></div>${canWork ? '<button class="primary-btn compact" data-open="fraction">＋ Nova fração</button>' : ''}</div>
+    ${canManageCompany(condo.company_id)?`<p class="cf-resident-admin-count">${residents.administratorCount(state,condo.id)} de 2 administradores nomeados. Os administradores aprovam as ocorrências dos condóminos antes do envio à gestora.</p>`:''}
+    ${items.length ? `<div class="table-wrap"><table><thead><tr><th>Fração</th><th>Piso</th><th>Permilagem</th><th>Estado</th><th>Acesso do condómino</th></tr></thead><tbody>${items.map(item => `<tr><td><strong>${esc(item.code)}</strong></td><td>${esc(item.floor || '—')}</td><td>${item.permillage ?? '—'}</td><td>${statusPill(item.status, item.status === 'active' ? 'Ativa' : item.status)}</td><td>${residents.fractionAccess(state,item)}</td></tr>`).join('')}</tbody></table></div>` : empty('Crie ou importe as frações deste condomínio.')}
   </section>`;
 }
 
 function issuesTab(condo, canWork) {
   const items = state.issues.filter(item => item.condominium_id === condo.id);
-  return `<section class="panel"><div class="panel-head"><div><h2>Ocorrências</h2><p>Problemas reportados por moradores e administração.</p></div><button class="primary-btn compact" data-open="issue">＋ Reportar</button></div>
+  return `<section class="panel"><div class="panel-head"><div><h2>Ocorrências</h2><p>As ocorrências dos condóminos seguem para a gestora após aprovação do administrador.</p></div><button class="primary-btn compact" data-open="issue">＋ Reportar</button></div>
     ${items.length ? `<div class="issue-grid">${items.map(issueCard).join('')}</div>` : empty('Ainda não foram reportadas ocorrências.')}
   </section>`;
 }
@@ -572,6 +575,7 @@ async function submitEntity(event, type) {
   form.querySelector('button[type="submit"]').disabled = true;
 
   try {
+    let successMessage='Guardado com sucesso.';
     if (type === 'company') {
       values.monthly_fee = Number(values.monthly_fee || 0);
       await api.createCompany(values);
@@ -589,7 +593,8 @@ async function submitEntity(event, type) {
     if (type === 'issue') {
       values.reporter_user_id = state.user.id;
       values.supporters_count = 1;
-      await api.createIssue(values);
+      const issue=await api.createIssue(values);
+      successMessage=issue.approval_status==='pending'?'Ocorrência enviada para aprovação do administrador do condomínio.':'Ocorrência enviada à gestora.';
     }
     if (type === 'notice') {
       values.important = form.elements.important.checked;
@@ -616,7 +621,7 @@ async function submitEntity(event, type) {
       await api.createObligation(values);
     }
     closeModal();
-    state.info = 'Guardado com sucesso.';
+    state.info = successMessage;
     await loadContext();
   } catch (error) {
     form.querySelector('button[type="submit"]').disabled = false;
@@ -665,6 +670,7 @@ async function openDocument(id) {
 }
 
 function collectionView() {
+  if (state.view === 'reports') return shell(reports.view(state));
   const title = ui.labels[state.view] || 'Visão geral';
   const condos = ui.scopedCondos(state);
   const header = `<div class="cf-form-line"><select id="condoFilter" class="cf-list-filter" aria-label="Filtrar condomínio"><option value="">Todos os condomínios</option>${state.condominiums.filter(c=>!state.dashboardCompanyId || c.company_id === state.dashboardCompanyId).map(c=>`<option value="${esc(c.id)}" ${c.id===state.dashboardCondoId?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div>`;
@@ -680,10 +686,6 @@ function collectionView() {
   }
   if (['assemblies','votes'].includes(state.view)) content = governance.collection(state,state.view);
   if (state.view === 'reservations') content = `<section class="panel"><div class="panel-head"><h2>${title}</h2></div><p class="cf-empty">Este módulo ainda não está disponível na plataforma.</p></section>`;
-  if (state.view === 'reports') {
-    const issues = ui.scopedItems(state,'issues');
-    content = `<section class="panel"><div class="panel-head"><h2>Relatório de ocorrências</h2><button class="primary-btn" id="exportReport">Exportar CSV</button></div><div class="table-wrap"><table><thead><tr><th>Condomínio</th><th>Ocorrência</th><th>Estado</th></tr></thead><tbody>${issues.map(i=>`<tr><td>${esc(condoName(i.condominium_id))}</td><td>${esc(i.title)}</td><td>${esc(ui.issueLabel(i.status))}</td></tr>`).join('')}</tbody></table></div>${!issues.length?'<p class="cf-empty">Sem ocorrências para apresentar.</p>':''}</section>`;
-  }
   return shell(header+content);
 }
 
@@ -703,6 +705,8 @@ function searchView() {
 }
 
 function bind() {
+  reports.bind(state,{rerender:render});
+  residents.bind(state,{modalShell,closeModal,reload:loadContext});
   governance.bind(state,{reload:loadContext,modalShell,closeModal,condominiumId:state.view==='condo'?state.selectedCondoId:null});
   document.querySelector('#authSwitch')?.addEventListener('click', () => {
     state.authMode = state.authMode === 'login' ? 'signup' : 'login';
@@ -775,12 +779,7 @@ function bind() {
   document.querySelector('#globalSearch')?.addEventListener('submit',event=>{event.preventDefault();state.searchQuery=new FormData(event.target).get('q').trim();if(state.searchQuery) goToView('search');});
   document.querySelector('#menuToggle')?.addEventListener('click',event=>{const open=document.querySelector('.mockup-shell').classList.toggle('cf-menu-open');event.currentTarget.setAttribute('aria-expanded',String(open));});
   document.querySelector('#closeSidebar')?.addEventListener('click',()=>{document.querySelector('.mockup-shell').classList.remove('cf-menu-open');document.querySelector('#menuToggle')?.setAttribute('aria-expanded','false');});
-  document.querySelector('#exportReport')?.addEventListener('click',()=>{
-    const cell=value=>'"'+String(value??'').replace(/^[=+@-]/,"'$&").replaceAll('"','""')+'"';
-    const rows=[['Condomínio','Ocorrência','Estado'],...ui.scopedItems(state,'issues').map(i=>[condoName(i.condominium_id),i.title,ui.issueLabel(i.status)])];
-    const url=URL.createObjectURL(new Blob(['\ufeff'+rows.map(r=>r.map(cell).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}));
-    const a=document.createElement('a');a.href=url;a.download='ocorrencias.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-  });
+
 }
 
 function render() {

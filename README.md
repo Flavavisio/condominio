@@ -144,3 +144,19 @@ Não abrir diretamente como `file://`, porque a aplicação usa ES Modules.
 A migração `supabase/migrations/20260925075423_assemblies_and_votes.sql` cria as tabelas, permissões e funções. O teste `supabase/tests/governance.sql` verifica os acessos e a integridade dos votos numa transação revertida no final; executar com o proprietário da base de dados.
 
 A navegação principal mantém Equipa, Condomínios, Avisos e Fornecedores. As assembleias e votações estão nos separadores do condomínio, imediatamente após Financeiro. O Super Admin tem um dashboard de quantidades exatas por empresa gestora e acesso direto a Licenças no menu lateral.
+
+### Acessos dos condóminos e aprovação de ocorrências
+
+Na ficha do condomínio, em Frações, a gestora pode criar uma conta com email e palavra-passe inicial por fração. Um email já registado mantém a palavra-passe existente e recebe a associação à fração; não é criado como funcionário da gestora. Os gestores só podem criar acessos nos condomínios que lhes estão atribuídos. A criação é processada pela Edge Function `invite-member`.
+
+A gestora pode nomear até dois administradores do condomínio entre os utilizadores com frações ativas. O limite e as permissões são validados na base de dados. As ocorrências de condóminos comuns ficam pendentes até um administrador aprovar ou rejeitar (com motivo). Só as aprovadas chegam à gestora e às suas notificações. O administrador vê a fila de aprovação no seu painel. A gestora trata o estado e o fornecedor após aprovação. As ocorrências existentes permanecem aprovadas. As votações mantêm um voto por fração, sem voto adicional por ser administrador.
+
+Migração: `20260925095349_resident_accounts_and_issue_approval.sql`. O teste SQL `supabase/tests/resident-approval.sql` usa dados temporários e termina com rollback.
+
+### Relatórios por condomínio
+
+Em Relatórios é obrigatório selecionar um condomínio e gerar o relatório. São consultados os registos atuais, com paginação, respeitando as permissões do utilizador: financeiro por fração, cobranças, recebimentos, acessos, ocorrências, assembleias e atas, resultados agregados de votações, manutenções, equipamentos, obrigações, verificações, inspeções, serviços e visitas, fornecedores, documentos e avisos. O botão Imprimir / Guardar PDF abre uma versão para impressão.
+
+O resumo financeiro calcula valores em cêntimos a partir das cobranças e alocações dos pagamentos; exclui cobranças anuladas dos totais de dívida. Não representa despesas ou saldo bancário. O relatório indica a data de geração e abrange todo o histórico acessível, sem misturar condomínios.
+
+Verificações locais: `npm run check`, `node tests/invite-member.test.mjs` e `node tests/reports.test.mjs`.

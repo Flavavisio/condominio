@@ -2,7 +2,7 @@
   "name": "Condomia",
   "short_name": "Condomia",
   "description": "Condomínio fácil. Assembleias, votações, ocorrências e gestão de condomínios.",
-  "start_url": "./",
+  "start_url": "./app.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f4f7fb",

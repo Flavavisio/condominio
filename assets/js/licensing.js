@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js';
+import {planFields,bindPlanFields,planSummary,enrichLicensePlans} from './plans.js';
 
 let access = null;
 let currentUser = null;
@@ -76,7 +77,7 @@ async function injectAdminLicenseBanner() {
   if (document.querySelector('.mockup-shell') && !document.querySelector('.cf-settings-license')) return;
   if (document.querySelector('.cf-license-banner')) return;
   if (!currentUser || access?.is_super_admin || !currentAdminCompany) return;
-  const { data } = await supabase.from('company_admin_licenses').select('id,billing_cycle,starts_on,expires_on,status,license_key').eq('company_id', currentAdminCompany).eq('user_id', currentUser.id).order('created_at',{ascending:false}).limit(1);
+  const { data } = await supabase.from('company_admin_licenses').select('id,billing_cycle,starts_on,expires_on,status,license_key,plan_id,condominium_limit,monthly_price').eq('company_id', currentAdminCompany).eq('user_id', currentUser.id).order('created_at',{ascending:false}).limit(1);
   const license = data?.[0] || null;
   const state = effectiveState(license);
   const main = document.querySelector('.main');
@@ -84,7 +85,7 @@ async function injectAdminLicenseBanner() {
   if (!main || !topbar || document.querySelector('.cf-license-banner')) return;
   const banner = document.createElement('div');
   banner.className = `cf-license-banner ${state.key}`;
-  banner.innerHTML = license ? `<div><strong>Licença ${esc(state.label)}</strong><span>${license.billing_cycle === 'annual' ? 'Anual' : 'Mensal'} · válida até ${fmt(license.expires_on)}</span></div><b>${esc(license.license_key)}</b>` : `<div><strong>Sem licença ativa</strong><span>O Super Admin precisa de emitir uma licença mensal ou anual para esta conta de administrador.</span></div><b>ACESSO ADMINISTRATIVO BLOQUEADO</b>`;
+  banner.innerHTML = license ? `<div><strong>Licença ${esc(state.label)}</strong><small>${esc(planSummary(license))}</small><span>${license.billing_cycle === 'annual' ? 'Anual' : 'Mensal'} · válida até ${fmt(license.expires_on)}</span></div><b>${esc(license.license_key)}</b>` : `<div><strong>Sem licença ativa</strong><span>O Super Admin precisa de emitir uma licença mensal ou anual para esta conta de administrador.</span></div><b>ACESSO ADMINISTRATIVO BLOQUEADO</b>`;
   const settings = document.querySelector('.cf-settings-license');
   if (settings) settings.append(banner); else topbar.insertAdjacentElement('afterend', banner);
 }
@@ -96,7 +97,7 @@ async function loadLicenseData() {
   ]);
   if (adminError) throw adminError;
   if (licenseError) throw licenseError;
-  return { admins: admins || [], licenses: licenses || [] };
+  return { admins: admins || [], licenses: await enrichLicensePlans(supabase,licenses) };
 }
 
 function latestFor(admin, licenses) {
@@ -107,7 +108,7 @@ function licenseRow(admin, license) {
   const state = effectiveState(license);
   const cycle = license?.billing_cycle === 'annual' ? 'Anual' : license?.billing_cycle === 'monthly' ? 'Mensal' : '—';
   return `<tr>
-    <td><strong>${esc(admin.company_name)}</strong></td>
+    <td><strong>${esc(admin.company_name)}</strong><small>${esc(planSummary(license))}</small></td>
     <td><strong>${esc(admin.full_name)}</strong><small>${esc(admin.email)}</small></td>
     <td>${cycle}</td>
     <td>${license ? fmt(license.starts_on) : '—'}</td>
@@ -153,16 +154,18 @@ async function openLicenses() {
 function openIssue(admin) {
   if (!admin) return;
   const root = overlay(`<section class="cf-license-modal"><header><div><span>EMITIR LICENÇA</span><h2>${esc(admin.company_name)}</h2><p>${esc(admin.full_name)} · ${esc(admin.email)}</p></div><button data-license-close>✕</button></header><form id="cfLicenseIssueForm">
+    ${planFields()}
     <label>Ciclo<select name="cycle"><option value="monthly">Mensal</option><option value="annual">Anual</option></select></label>
     <label>Data de início<input name="starts" type="date" value="${new Date().toISOString().slice(0,10)}" required></label>
     <label class="wide">Notas<textarea name="notes" rows="3" placeholder="Opcional"></textarea></label>
     <div class="actions wide"><button type="button" data-license-close>Cancelar</button><button class="primary" type="submit">Emitir licença</button></div>
   </form></section>`,'cf-license-modal-backdrop');
+  bindPlanFields(root);
   root.querySelector('#cfLicenseIssueForm').addEventListener('submit', async e => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const button = e.currentTarget.querySelector('button[type="submit"]'); button.disabled=true; button.textContent='A emitir…';
-    const { error } = await supabase.rpc('issue_company_admin_license',{p_company_id:admin.company_id,p_user_id:admin.user_id,p_billing_cycle:fd.get('cycle'),p_starts_on:fd.get('starts'),p_notes:fd.get('notes') || null});
+    const { error } = await supabase.rpc('issue_planned_company_license',{p_company_id:admin.company_id,p_user_id:admin.user_id,p_billing_cycle:fd.get('cycle'),p_starts_on:fd.get('starts'),p_plan_id:fd.get('plan_id'),p_notes:fd.get('notes') || null});
     if (error) { button.disabled=false; button.textContent='Emitir licença'; return toast(error.message,true); }
     root.remove(); document.querySelector('.cf-license-overlay')?.remove(); toast('Licença emitida com sucesso.'); await openLicenses();
   });

@@ -1,5 +1,5 @@
-const CACHE = 'condomia-v11-payment-proofs';
-const CORE = ['./','./index.html','./manifest.webmanifest','./assets/icons/cf-icon.svg'];
+const CACHE = 'condomia-v12-public-plans';
+const CORE = ['./','./index.html','./app.html','./demo.html','./manifest.webmanifest','./assets/icons/cf-icon.svg'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(CORE)).catch(() => null));
@@ -18,11 +18,12 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
   if (event.request.mode === 'navigate') {
+    const fallback=url.pathname.endsWith('/app.html')?'./app.html':url.pathname.endsWith('/demo.html')?'./demo.html':'./index.html';
     event.respondWith(fetch(event.request).then(response => {
       const copy = response.clone();
-      caches.open(CACHE).then(cache => cache.put('./index.html', copy)).catch(() => null);
+      caches.open(CACHE).then(cache => cache.put(fallback, copy)).catch(() => null);
       return response;
-    }).catch(() => caches.match('./index.html')));
+    }).catch(() => caches.match(fallback)));
     return;
   }
   event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request).then(response => {
@@ -52,7 +53,7 @@ self.addEventListener('push', event => {
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   let target = event.notification?.data?.url || './';
-  if (target.startsWith('/?')) target = `.${target}`;
+  if (target.startsWith('/?')) target = `./app.html${target.slice(1)}`;
   const targetUrl = new URL(target, self.registration.scope).href;
   event.waitUntil(self.clients.matchAll({ type:'window', includeUncontrolled:true }).then(clients => {
     for (const client of clients) {

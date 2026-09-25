@@ -109,7 +109,7 @@ async function openNotifications() {
     await loadNotifications();
     if (url) {
       let target = url;
-      if (target.startsWith('/?')) target = `.${target}`;
+      if (target.startsWith('/?')) target = `./app.html${target.slice(1)}`;
       window.location.href = new URL(target, window.location.href).href;
     }
   }));

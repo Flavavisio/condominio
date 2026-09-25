@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js';
+import {planFields,bindPlanFields,planSummary,enrichLicensePlans} from './plans.js';
 
 let access = null;
 let timer = null;
@@ -29,7 +30,7 @@ async function loadData() {
   ]);
   if (adminError) throw adminError;
   if (licenseError) throw licenseError;
-  return { admins: admins || [], licenses: licenses || [] };
+  return { admins: admins || [], licenses: await enrichLicensePlans(supabase,licenses) };
 }
 
 function latestLicense(admin, licenses) {
@@ -63,22 +64,25 @@ function advancedOverlay(html) {
 
 async function issueLicense(admin, afterSave) {
   const root = advancedOverlay(`<section class="cf-license-modal"><header><div><span>EMITIR LICENÇA</span><h2>${esc(admin.company_name)}</h2><p>${esc(admin.full_name)} · ${esc(admin.email)}</p></div><button data-lm-close>✕</button></header><form data-lm-form>
+    ${planFields()}
     <label>Ciclo<select name="cycle"><option value="monthly">Mensal</option><option value="annual">Anual</option></select></label>
     <label>Data de início<input name="starts" type="date" value="${new Date().toISOString().slice(0,10)}" required></label>
     <label class="wide">Notas<textarea name="notes" rows="3" placeholder="Opcional"></textarea></label>
     <div class="actions wide"><button type="button" data-lm-close>Cancelar</button><button class="primary" type="submit">Emitir licença</button></div>
   </form></section>`);
+  bindPlanFields(root);
   root.querySelector('[data-lm-form]').addEventListener('submit', async event => {
     event.preventDefault();
     const fd = new FormData(event.currentTarget);
     const button = event.currentTarget.querySelector('button[type="submit"]');
     button.disabled = true;
     button.textContent = 'A emitir…';
-    const { error } = await supabase.rpc('issue_company_admin_license', {
+    const { error } = await supabase.rpc('issue_planned_company_license', {
       p_company_id: admin.company_id,
       p_user_id: admin.user_id,
       p_billing_cycle: fd.get('cycle'),
       p_starts_on: fd.get('starts'),
+      p_plan_id: fd.get('plan_id'),
       p_notes: fd.get('notes') || null
     });
     if (error) { button.disabled = false; button.textContent = 'Emitir licença'; return toast(error.message, true); }
@@ -90,20 +94,23 @@ async function issueLicense(admin, afterSave) {
 
 async function editLicense(license, afterSave) {
   const root = advancedOverlay(`<section class="cf-license-modal"><header><div><span>EDITAR LICENÇA</span><h2>${esc(license.company_name || 'Licença')}</h2><p>${esc(license.full_name || license.email || '')}</p></div><button data-lm-close>✕</button></header><form data-lm-form>
+    ${planFields(license.plan_id)}
     <label>Ciclo<select name="cycle"><option value="monthly" ${license.billing_cycle === 'monthly' ? 'selected' : ''}>Mensal</option><option value="annual" ${license.billing_cycle === 'annual' ? 'selected' : ''}>Anual</option></select></label>
     <label>Início<input name="starts" type="date" value="${esc(license.starts_on || '')}" required></label>
     <label>Fim<input name="expires" type="date" value="${esc(license.expires_on || '')}" required></label>
     <label class="wide">Notas<textarea name="notes" rows="3">${esc(license.notes || '')}</textarea></label>
     <div class="actions wide"><button type="button" data-lm-close>Cancelar</button><button class="primary" type="submit">Guardar alterações</button></div>
   </form></section>`);
+  bindPlanFields(root);
   root.querySelector('[data-lm-form]').addEventListener('submit', async event => {
     event.preventDefault();
     const fd = new FormData(event.currentTarget);
-    const { error } = await supabase.rpc('update_company_admin_license', {
+    const { error } = await supabase.rpc('update_planned_company_license', {
       p_license_id: license.id,
       p_billing_cycle: fd.get('cycle'),
       p_starts_on: fd.get('starts'),
       p_expires_on: fd.get('expires'),
+      p_plan_id: fd.get('plan_id'),
       p_notes: fd.get('notes') || null
     });
     if (error) return toast(error.message, true);
@@ -155,7 +162,7 @@ async function openCompanyLicenses(companyId = null) {
     const companyName = admins[0]?.company_name || 'Todas as empresas';
     const root = advancedOverlay(`<section class="cf-license-page">
       <header><div><span>SUPER ADMIN</span><h2>Gestão de licenças</h2><p>${esc(companyId ? companyName : 'Licenças dos administradores das empresas gestoras')}</p></div><button data-lm-close>✕</button></header>
-      <div class="cf-license-table-wrap" style="padding-top:22px"><table class="cf-license-table"><thead><tr><th>Empresa</th><th>Administrador</th><th>Ciclo</th><th>Início</th><th>Fim</th><th>Estado</th><th>Ações</th></tr></thead><tbody>${admins.length ? admins.map(admin => { const license = latestLicense(admin, ctx.licenses); const state = stateOf(license); return `<tr><td><strong>${esc(admin.company_name)}</strong></td><td><strong>${esc(admin.full_name)}</strong><small>${esc(admin.email)}</small></td><td>${license ? (license.billing_cycle === 'annual' ? 'Anual' : 'Mensal') : '—'}</td><td>${license ? fmt(license.starts_on) : '—'}</td><td>${license ? fmt(license.expires_on) : '—'}</td><td><span class="cf-license-pill ${state.key}">${esc(state.label)}</span></td><td class="cf-license-actions">${actionButtons(admin, license)}</td></tr>`; }).join('') : '<tr><td colspan="7">Esta empresa ainda não tem administradores.</td></tr>'}</tbody></table></div>
+      <div class="cf-license-table-wrap" style="padding-top:22px"><table class="cf-license-table"><thead><tr><th>Empresa</th><th>Administrador</th><th>Ciclo</th><th>Início</th><th>Fim</th><th>Estado</th><th>Ações</th></tr></thead><tbody>${admins.length ? admins.map(admin => { const license = latestLicense(admin, ctx.licenses); const state = stateOf(license); return `<tr><td><strong>${esc(admin.company_name)}</strong><small>${esc(planSummary(license))}</small></td><td><strong>${esc(admin.full_name)}</strong><small>${esc(admin.email)}</small></td><td>${license ? (license.billing_cycle === 'annual' ? 'Anual' : 'Mensal') : '—'}</td><td>${license ? fmt(license.starts_on) : '—'}</td><td>${license ? fmt(license.expires_on) : '—'}</td><td><span class="cf-license-pill ${state.key}">${esc(state.label)}</span></td><td class="cf-license-actions">${actionButtons(admin, license)}</td></tr>`; }).join('') : '<tr><td colspan="7">Esta empresa ainda não tem administradores.</td></tr>'}</tbody></table></div>
     </section>`);
     const refresh = async () => openCompanyLicenses(companyId);
     root.querySelectorAll('[data-lm-issue]').forEach(btn => btn.addEventListener('click', () => { const [c,u] = btn.dataset.lmIssue.split('|'); const admin = ctx.admins.find(item => item.company_id === c && item.user_id === u); issueLicense(admin, refresh); }));

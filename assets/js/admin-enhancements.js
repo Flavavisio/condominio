@@ -285,8 +285,8 @@ async function openCompany(companyId) {
             <label>NIF<input name="nif" value="${esc(company.nif || '')}"></label>
             <label>Email<input name="email" type="email" value="${esc(company.email || '')}"></label>
             <label>Telefone<input name="phone" value="${esc(company.phone || '')}"></label>
-            <label>Plano<select name="plan">${['Starter','Pro','Business','Enterprise'].map(plan => `<option ${company.plan === plan ? 'selected' : ''}>${plan}</option>`).join('')}</select></label>
-            <label>Mensalidade (€)<input name="monthly_fee" type="number" step="0.01" value="${Number(company.monthly_fee || 0)}"></label>
+            <label>Plano<input value="${esc(company.plan||'Por definir')}" readonly><small>Alterar em Gerir licenças.</small></label>
+            <label>Mensalidade (€)<input name="monthly_fee" readonly type="number" step="0.01" value="${Number(company.monthly_fee || 0)}"></label>
             <label>Estado<select name="status"><option value="active" ${company.status === 'active' ? 'selected' : ''}>Ativa</option><option value="suspended" ${company.status === 'suspended' ? 'selected' : ''}>Suspensa</option><option value="cancelled" ${company.status === 'cancelled' ? 'selected' : ''}>Cancelada</option></select></label>
             <label>Início contrato<input name="contract_start" type="date" value="${esc(company.contract_start || '')}"></label>
             <label>Fim contrato<input name="contract_end" type="date" value="${esc(company.contract_end || '')}"></label>

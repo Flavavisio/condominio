@@ -168,3 +168,21 @@ O condómino tem apenas Resumo, Ocorrências, Avisos, Assembleias, Votações e 
 O envio de comprovativos aceita PDF, JPG, PNG e WEBP até 10 MB num bucket privado. Cada comprovativo indica uma quota, data e valor (total ou parcial). Permanece pendente sem liquidar a dívida. A gestora recebe uma notificação e, no Financeiro do condomínio, abre o ficheiro e valida ou rejeita com motivo. A validação regista o pagamento e a alocação na mesma transação; uma quota totalmente liquidada fica paga. Rejeições permitem novo envio. Os ficheiros submetidos não podem ser substituídos pelo condómino e só são abertos através de ligações temporárias autorizadas. Não existe cobrança online: o pagamento é realizado pelos meios indicados pela gestora.
 
 A migração `20260925110943_resident_payment_proofs.sql` restringe as permissões financeiras, cria o armazenamento e a validação, e protege todas as alocações contra valores superiores à dívida/pagamento e cruzamento de frações. `supabase/tests/payment-proofs.sql` verifica o fluxo com dados temporários e rollback. O relatório completo inclui o estado dos comprovativos.
+
+### Página pública, demonstração e planos
+
+`index.html` é a apresentação pública da Condomia, com funcionalidades, perguntas frequentes, preços e demonstração interativa incorporada. A aplicação autenticada está em `app.html`; `demo.html` usa apenas dados fictícios em memória e não comunica com o Supabase. Ligações antigas de notificações e autenticação são encaminhadas para a aplicação.
+
+| Plano (até condomínios) | Total mensal, IVA incluído | Por condomínio na capacidade máxima |
+| --- | --- | --- |
+| 1 | 11,90 € | 11,90 € |
+| 10 | 80,00 € | 8,00 € |
+| 50 | 380,00 € | 7,60 € |
+| 100 | 650,00 € | 6,50 € |
+| 200 | 1 200,00 € | 6,00 € |
+
+O ciclo anual corresponde a 12 mensalidades, sem desconto adicional. Selecionar um plano na página pública não efetua cobrança nem ativa uma licença. O identificador `requested_plan` no registo indica apenas interesse comercial, nunca autoriza acesso. O Super Admin emite/edita a licença escolhendo o plano; o servidor valida o catálogo e guarda uma cópia dos valores na licença.
+
+A capacidade é única e partilhada por toda a empresa gestora: não é somada por funcionário ou licença de administrador. A última atribuição de plano determina o limite atual da empresa; licenças anteriores conservam o respetivo histórico. A criação de condomínios acima do limite e reduções para uma capacidade inferior à utilização atual são bloqueadas pela base de dados. Empresas anteriores sem plano definido mantêm o acesso existente até atribuição explícita de plano.
+
+Migração: `20260925154128_condominium_license_plans.sql`. O teste `supabase/tests/license-plans.sql` verifica emissão, preços, limites, alterações, permissões e renovação numa transação com rollback. Verificação de sintaxe: `npm run check`.

@@ -1,4 +1,5 @@
 import * as api from './api.js';
+import {PLANS,euros} from './plans.js';
 import * as ui from './mockup-ui.js';
 import * as governance from './governance.js';
 import * as residents from './residents.js';
@@ -7,6 +8,7 @@ import * as reports from './reports.js';
 
 const app = document.querySelector('#app');
 let initialRoute=new URLSearchParams(window.location.search);
+const selectedPublicPlan=PLANS.find(p=>p.id===initialRoute.get('plan'));
 
 const state = {
   session: null,
@@ -197,6 +199,7 @@ function authView() {
           <span class="eyebrow blue">${signup ? 'CRIAR CONTA' : 'ACESSO À PLATAFORMA'}</span>
           <h2>${signup ? 'Primeiro acesso' : 'Bem-vindo'}</h2>
           <p>${signup ? 'Crie a sua conta. O acesso a empresas e condomínios é atribuído pela administração.' : 'Entre com a sua conta da plataforma.'}</p>
+          ${selectedPublicPlan?`<p class="flash success">${esc(selectedPublicPlan.name)} · até ${selectedPublicPlan.limit} condomínios · ${euros(selectedPublicPlan.price)}/mês, IVA incluído. A ativação é feita pela equipa Condomia.</p>`:''}
           ${flash()}
           <form id="authForm" class="form-stack">
             ${signup ? '<label>Nome completo<input type="text" name="fullName" autocomplete="name" required placeholder="Nome completo"></label>' : ''}
@@ -205,7 +208,7 @@ function authView() {
             <button class="primary-btn" type="submit">${signup ? 'Criar conta' : 'Entrar'}</button>
           </form>
           <button class="auth-switch" id="authSwitch">${signup ? 'Já tenho conta → Entrar' : 'Primeiro acesso → Criar conta'}</button>
-          <small class="auth-note">Os privilégios de Super Admin nunca são atribuídos pelo browser.</small>
+          <small class="auth-note"><a href="index.html">← Voltar à apresentação da Condomia</a></small>
         </div>
       </section>
     </main>`;
@@ -530,7 +533,7 @@ function closeModal() {
 }
 
 function modalCompany() {
-  return modalShell('Nova empresa gestora', 'SUPER ADMIN', `<form id="entityForm" class="form-grid"><label>Nome legal<input name="name" required></label><label>Label / marca<input name="label" required></label><label>NIF<input name="nif"></label><label>Email<input name="email" type="email"></label><label>Telefone<input name="phone"></label><label>Plano<select name="plan"><option>Starter</option><option>Pro</option><option>Business</option><option>Enterprise</option></select></label><label>Mensalidade (€)<input name="monthly_fee" type="number" step="0.01" value="49.90"></label><label>Cor da marca<input name="brand_color" type="color" value="#3768f5"></label>${modalActions('Criar empresa')}</form>`);
+  return modalShell('Nova empresa gestora', 'SUPER ADMIN', `<form id="entityForm" class="form-grid"><label>Nome legal<input name="name" required></label><label>Label / marca<input name="label" required></label><label>NIF<input name="nif"></label><label>Email<input name="email" type="email"></label><label>Telefone<input name="phone"></label><p class="wide">O plano e o limite de condomínios são definidos ao emitir a licença.</p><label>Cor da marca<input name="brand_color" type="color" value="#3768f5"></label>${modalActions('Criar empresa')}</form>`);
 }
 
 function modalCondominium() {
@@ -588,7 +591,7 @@ async function submitEntity(event, type) {
   try {
     let successMessage='Guardado com sucesso.';
     if (type === 'company') {
-      values.monthly_fee = Number(values.monthly_fee || 0);
+      values.monthly_fee = 0; values.plan = 'Sem plano';
       await api.createCompany(values);
     }
     if (type === 'condominium') {
@@ -734,7 +737,7 @@ function bind() {
     submit.disabled = true;
     try {
       if (state.authMode === 'signup') {
-        const result = await api.signUp({ email: values.email, password: values.password, fullName: values.fullName });
+        const result = await api.signUp({ email: values.email, password: values.password, fullName: values.fullName, requestedPlan: selectedPublicPlan?.id });
         if (!result.session) {
           state.info = 'Conta criada. Confirme o email se a confirmação estiver ativa e depois faça login.';
           state.authMode = 'login';

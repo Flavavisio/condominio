@@ -37,11 +37,11 @@ export async function signIn(email, password) {
   return throwIfError(await supabase.auth.signInWithPassword({ email, password }), 'Login');
 }
 
-export async function signUp({ email, password, fullName }) {
+export async function signUp({ email, password, fullName, requestedPlan }) {
   return throwIfError(await supabase.auth.signUp({
     email,
     password,
-    options: { data: { full_name: fullName } }
+    options: { data: { full_name: fullName, ...(requestedPlan ? {requested_plan:requestedPlan} : {}) } }
   }), 'Registo');
 }
 

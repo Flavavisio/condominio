@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient } from "npm:@supabase/supabase-js@2.117.1";
 
 type InvitePayload = {
   email?: string;
@@ -11,9 +11,15 @@ type InvitePayload = {
   memberRole?: "owner" | "tenant" | "representative" | "porter";
 };
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
 const json = (body: unknown, status = 200) => Response.json(body, {
   status,
-  headers: { "Content-Type": "application/json" }
+  headers: { ...corsHeaders, "Content-Type": "application/json" }
 });
 
 async function findExistingUserByEmail(admin: any, email: string) {
@@ -28,6 +34,7 @@ async function findExistingUserByEmail(admin: any, email: string) {
 }
 
 Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Método não permitido." }, 405);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;

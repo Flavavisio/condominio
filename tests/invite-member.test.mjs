@@ -1,0 +1,18 @@
+import {readFileSync} from 'node:fs';
+import {stripTypeScriptTypes} from 'node:module';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+const source=stripTypeScriptTypes(readFileSync(new URL('../supabase/functions/invite-member/index.ts',import.meta.url),'utf8').replace(/^import .*\n/,''));
+let handler,role='admin',licensed=true,validToken=true,created=0,associated=null,authCalls=0;
+const client={auth:{getUser:async()=>{authCalls++;return {data:{user:validToken?{id:'admin'}:null},error:validToken?null:new Error('Invalid')}} ,admin:{listUsers:async()=>({data:{users:[]}}),createUser:async()=>{created++;return {data:{user:{id:'new-user'}}}}}},from(table){const q={select(){return q},eq(){return q},lte(){return q},gte(){return q},limit(){return q},maybeSingle:async()=>({data:table==='profiles'?{is_super_admin:false}:table==='company_members'?{role,status:'active'}:table==='company_admin_licenses'&&licensed?{id:'license'}:null}),upsert:async v=>{associated=v;return {error:null}}};return q}};
+vm.runInNewContext(source,{Response,Request,Date,createClient:()=>client,Deno:{env:{get:()=> 'test-only'},serve:fn=>{handler=fn}}});
+const request=(method,token,body)=>new Request('https://test.invalid',{method,headers:{...(token?{Authorization:'Bearer '+token}:{}),'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
+const payload={email:'fixture@example.invalid',password:'test-fixture-only',companyId:'company',companyRole:'staff'};
+let r=await handler(request('OPTIONS'));assert.equal(r.status,204);assert.equal(authCalls,0);assert.equal(r.headers.get('access-control-allow-origin'),'*');assert.match(r.headers.get('access-control-allow-methods'),/POST/);
+r=await handler(request('GET'));assert.equal(r.status,405);assert.equal(r.headers.get('access-control-allow-origin'),'*');
+r=await handler(request('POST',null,payload));assert.equal(r.status,401);
+validToken=false;r=await handler(request('POST','invalid',payload));assert.equal(r.status,401);validToken=true;
+role='staff';r=await handler(request('POST','fixture',payload));assert.equal(r.status,403);assert.equal(created,0);
+role='admin';licensed=false;r=await handler(request('POST','fixture',payload));assert.equal(r.status,403);assert.equal(created,0);
+licensed=true;r=await handler(request('POST','fixture',payload));assert.equal(r.status,200);assert.equal(r.headers.get('access-control-allow-origin'),'*');assert.equal(created,1);assert.equal(associated.role,'staff');assert.equal(associated.company_id,'company');assert.equal((await r.json()).created,true);
+console.log('PASS: preflight, error CORS, missing/invalid auth, staff rejection, inactive license rejection and authorized creation with mocked Auth.');

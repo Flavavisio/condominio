@@ -17,7 +17,7 @@ export function collection(s,kind){
  ${items.length?`<div class="rows">${items.map(i=>`<button class="data-row row-button cf-governance-row" data-governance-kind="${kind}" data-governance-id="${e(i.id)}"><span class="cf-square-icon blue">${icon(assembly?'calendar':'vote')}</span><span><strong>${e(i.title)}</strong><small>${e(condoName(s,i.condominium_id))} · ${e(date(assembly?i.scheduled_for:i.closes_at))}${assembly?'':' · fim da votação'}</small></span><span class="cf-status">${states[assembly?i.status:pollState(i)]}</span>${icon('chevron')}</button>`).join('')}</div>`:`<p class="cf-empty">${assembly?'Ainda não existem assembleias.':'Ainda não existem votações.'}</p>`}</section>`;
 }
 
-export function bind(s,{reload,modalShell,closeModal}){
+export function bind(s,{reload,modalShell,closeModal,condominiumId=null}){
  const show=(title,body)=>{
   const host=document.querySelector('#modalHost');host.innerHTML=modalShell(title,'CONDOMÍNIO',body);
   host.querySelector('.modal').classList.add('cf-governance-modal');
@@ -27,9 +27,9 @@ export function bind(s,{reload,modalShell,closeModal}){
  const error=(host,err)=>{const el=host.querySelector('[data-governance-error]');if(el)el.textContent=err?.message||'Não foi possível concluir a operação.';};
  const formField=(label,name,value='',type='text',required=true)=>`<label>${label}<input name="${name}" type="${type}" value="${e(value)}" ${required?'required':''} ${type==='text'?'maxlength="200"':''}></label>`;
  const edit=(kind,item=null)=>{
-  const assembly=kind==='assemblies', condos=scopedCondos(s).filter(c=>manage(s,c.id));
+  const assembly=kind==='assemblies', condos=(condominiumId?s.condominiums.filter(c=>c.id===condominiumId):scopedCondos(s)).filter(c=>manage(s,c.id));
   if(!condos.length||item&&!manage(s,item.condominium_id))return;
-  const initial=item?.condominium_id||s.dashboardCondoId||condos[0].id;
+  const initial=item?.condominium_id||condominiumId||s.dashboardCondoId||condos[0].id;
   const locked=item&&!assembly&&item.status!=='draft';
   const options=assembly?['draft','scheduled','completed','cancelled']:locked?[item.status,...(item.status==='open'?['closed','cancelled']:[])]:['draft','open'];
   const host=show(item?'Editar '+(assembly?'assembleia':'votação'):(assembly?'Nova assembleia':'Nova votação'),`<form id="governanceForm" class="form-grid">

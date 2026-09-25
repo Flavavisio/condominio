@@ -9,6 +9,7 @@ const state = {
   user: null,
   profile: null,
   companies: [],
+  companyStats: [],
   companyMembers: [],
   condominiums: [],
   fractions: [],
@@ -138,6 +139,7 @@ async function loadContext({ keepView = true } = {}) {
 function resetWorkspace() {
   state.profile = null;
   state.companies = [];
+  state.companyStats = [];
   state.companyMembers = [];
   state.condominiums = [];
   state.fractions = [];
@@ -274,7 +276,7 @@ function obligationState(item) {
 }
 
 function dashboardView() {
-  return shell(ui.dashboard(state));
+  return shell(isSuperAdmin() ? ui.superDashboard(state) : ui.dashboard(state));
 }
 
 function attentionRows(issues, obligations) {
@@ -393,6 +395,8 @@ function condoView() {
       ${canWork ? condoTab('equipment', 'Equipamentos') : ''}
       ${canWork ? condoTab('maintenance', 'Manutenção') : ''}
       ${canWork ? condoTab('obligations', 'Obrigações') : ''}
+      ${condoTab('assemblies', 'Assembleias')}
+      ${condoTab('votes', 'Votações')}
     </nav>
     ${condoTabContent(condo, canWork)}`);
 }
@@ -402,6 +406,7 @@ function condoTab(id, label) {
 }
 
 function condoTabContent(condo, canWork) {
+  if (['assemblies','votes'].includes(state.condoTab)) return governance.collection({...state,dashboardCompanyId:'',dashboardCondoId:condo.id},state.condoTab);
   if (state.condoTab === 'fractions') return fractionsTab(condo, canWork);
   if (state.condoTab === 'issues') return issuesTab(condo, canWork);
   if (state.condoTab === 'documents') return `<section class="panel"><div class="panel-head"><h2>Documentos</h2></div>${state.documents.filter(d=>d.condominium_id===condo.id).map(d=>`<button class="data-row row-button" data-document="${esc(d.id)}">${ui.icon('document')}<strong>${esc(d.name)}</strong>${ui.icon('chevron')}</button>`).join('')||empty('Sem documentos publicados.')}</section>`;
@@ -683,7 +688,7 @@ function collectionView() {
 }
 
 function settingsView() {
-  return shell(`<section class="panel"><div class="panel-head"><h2>Configurações</h2></div><div class="cf-settings-grid"><button class="ghost-btn" data-view="profile">Perfil</button><button class="ghost-btn" id="reloadBtn">Atualizar dados</button><button class="ghost-btn" data-view="obligations">Obrigações</button></div><div id="settingsTools" class="cf-settings-tools">${isSuperAdmin() ? navItem('companies', 'Empresas gestoras', '▦') : ''}</div><div class="cf-settings-license"></div></section>`);
+  return shell(`<section class="panel"><div class="panel-head"><h2>Configurações</h2></div><div class="cf-settings-grid"><button class="ghost-btn" data-view="profile">Perfil</button><button class="ghost-btn" id="reloadBtn">Atualizar dados</button>${!isSuperAdmin()?'<button class="ghost-btn" data-view="obligations">Obrigações</button>':''}</div><div id="settingsTools" class="cf-settings-tools"></div><div class="cf-settings-license"></div></section>`);
 }
 
 function profileView() {
@@ -698,7 +703,7 @@ function searchView() {
 }
 
 function bind() {
-  governance.bind(state,{reload:loadContext,modalShell,closeModal});
+  governance.bind(state,{reload:loadContext,modalShell,closeModal,condominiumId:state.view==='condo'?state.selectedCondoId:null});
   document.querySelector('#authSwitch')?.addEventListener('click', () => {
     state.authMode = state.authMode === 'login' ? 'signup' : 'login';
     state.error = ''; state.info = ''; render();
@@ -762,7 +767,9 @@ function bind() {
     chooseCondoFor('issue');
   }));
   document.querySelectorAll('[data-resident-route]').forEach(btn=>btn.addEventListener('click',()=>{
-    state.dashboardCondoId=btn.dataset.residentCondo; goToView(btn.dataset.residentRoute);
+    state.dashboardCondoId=btn.dataset.residentCondo;
+    if (['assemblies','votes'].includes(btn.dataset.residentRoute)) {state.selectedCondoId=btn.dataset.residentCondo;state.condoTab=btn.dataset.residentRoute;goToView('condo');}
+    else goToView(btn.dataset.residentRoute);
   }));
   document.querySelectorAll('[data-document]').forEach(btn=>btn.addEventListener('click',()=>openDocument(btn.dataset.document)));
   document.querySelector('#globalSearch')?.addEventListener('submit',event=>{event.preventDefault();state.searchQuery=new FormData(event.target).get('q').trim();if(state.searchQuery) goToView('search');});
@@ -777,6 +784,7 @@ function bind() {
 }
 
 function render() {
+  if (isSuperAdmin() && !['dashboard','companies','settings','profile'].includes(state.view)) state.view='dashboard';
   if (state.loading) {
     app.innerHTML = '<div class="boot-screen"><div class="boot-mark">C</div><strong>Condomia</strong><span>A sincronizar com Supabase…</span></div>';
     return;
@@ -797,6 +805,7 @@ function render() {
   else app.innerHTML = dashboardView();
 
   bind();
+  requestAnimationFrame(()=>document.querySelector('.module-tabs .active')?.scrollIntoView({block:'nearest',inline:'nearest'}));
 }
 
 api.onAuthStateChange((_event, session) => {

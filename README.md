@@ -142,3 +142,5 @@ Não abrir diretamente como `file://`, porque a aplicação usa ES Modules.
 - O acesso à equipa e à criação de gestores/funcionários está no menu lateral do administrador da empresa.
 
 A migração `supabase/migrations/20260925075423_assemblies_and_votes.sql` cria as tabelas, permissões e funções. O teste `supabase/tests/governance.sql` verifica os acessos e a integridade dos votos numa transação revertida no final; executar com o proprietário da base de dados.
+
+A navegação principal mantém Equipa, Condomínios, Avisos e Fornecedores. As assembleias e votações estão nos separadores do condomínio, imediatamente após Financeiro. O Super Admin tem um dashboard de quantidades exatas por empresa gestora e acesso direto a Licenças no menu lateral.

@@ -56,7 +56,7 @@ async function resolveIdentity() {
 }
 
 function injectSuperAdminNav() {
-  const nav = document.querySelector('.mockup-shell') ? document.querySelector('#settingsTools') : document.querySelector('.sidebar nav');
+  const nav = document.querySelector('.sidebar nav');
   if (!nav) return;
   if (!access?.is_super_admin) {
     nav.querySelector('.cf-license-nav')?.remove();

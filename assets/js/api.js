@@ -94,7 +94,19 @@ export async function loadWorkspace(userId) {
     if (!profileResult.error) profiles = profileResult.data || [];
   }
 
+  const companyStats = profile.data?.is_super_admin ? await Promise.all((collections[0].data || []).map(async company => {
+    const counts = await Promise.all([
+      supabase.from('condominiums').select('id', {count:'exact',head:true}).eq('company_id',company.id),
+      supabase.from('fractions').select('id,condominiums!inner(company_id)', {count:'exact',head:true}).eq('condominiums.company_id',company.id),
+      supabase.from('company_members').select('id', {count:'exact',head:true}).eq('company_id',company.id),
+      ...['issues','assemblies','polls'].map(table=>supabase.from(table).select('id,condominiums!inner(company_id)', {count:'exact',head:true}).eq('condominiums.company_id',company.id))
+    ]);
+    counts.forEach(result=>throwIfError(result,'Quantidades da empresa gestora'));
+    return Object.fromEntries([['company_id',company.id],...['condominiums','fractions','team','issues','assemblies','polls'].map((key,index)=>[key,counts[index].count || 0])]);
+  })) : [];
+
   return {
+    companyStats,
     profile: profile.data,
     companies: collections[0].data || [],
     companyMembers,

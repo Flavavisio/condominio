@@ -318,7 +318,7 @@ function injectFinanceTab() {
   btn.className = 'module-tab cf-finance-tab';
   btn.textContent = 'Financeiro';
   btn.addEventListener('click', showFinance);
-  nav.appendChild(btn);
+  nav.insertBefore(btn,nav.querySelector('[data-condo-tab=assemblies]'));
 }
 
 const observer = new MutationObserver(() => injectFinanceTab());

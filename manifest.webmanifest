@@ -1,12 +1,12 @@
 {
-  "name": "Condomínio Fácil",
-  "short_name": "Condomínio Fácil",
-  "description": "Gestão de condomínios, ocorrências, serviços, quotas e alertas.",
+  "name": "Condomia",
+  "short_name": "Condomia",
+  "description": "Condomínio fácil. Assembleias, votações, ocorrências e gestão de condomínios.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f4f7fb",
-  "theme_color": "#101828",
+  "theme_color": "#0b3152",
   "orientation": "any",
   "icons": [
     {

@@ -34,8 +34,8 @@ function showGate(company, license, user) {
   root.className = 'cf-license-gate';
   const state = !license ? 'Sem licença emitida' : license.status === 'suspended' ? 'Licença suspensa' : license.status === 'cancelled' ? 'Licença cancelada' : 'Licença expirada';
   root.innerHTML = `<section>
-    <div class="cf-license-gate-mark">CF</div>
-    <span>CONDOMÍNIO FÁCIL</span>
+    <div class="cf-license-gate-mark">C</div>
+    <span>CONDOMIA</span>
     <h1>${esc(state)}</h1>
     <p>A conta de administrador da empresa <strong>${esc(company?.label || company?.name || 'gestora')}</strong> necessita de uma licença mensal ou anual ativa emitida pelo Super Admin.</p>
     <p style="margin-top:8px;font-size:11px;color:#667085">Conta ativa: <strong>${esc(user?.email || '—')}</strong></p>

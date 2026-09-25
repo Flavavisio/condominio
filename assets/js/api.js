@@ -15,7 +15,7 @@ const TABLES = [
   'maintenance',
   'obligations',
   'obligation_checklist_items',
-  'obligation_inspections'
+  'obligation_inspections', 'assemblies', 'polls', 'poll_votes'
 ];
 
 function throwIfError(result, context = 'Supabase') {
@@ -70,7 +70,10 @@ export async function loadWorkspace(userId) {
     supabase.from('maintenance').select('*').order('scheduled_for', { ascending: true, nullsFirst: false }),
     supabase.from('obligations').select('*').order('next_date', { ascending: true, nullsFirst: false }),
     supabase.from('obligation_checklist_items').select('*').order('sort_order'),
-    supabase.from('obligation_inspections').select('*').order('performed_on', { ascending: false })
+    supabase.from('obligation_inspections').select('*').order('performed_on', { ascending: false }),
+    supabase.from('assemblies').select('*').order('scheduled_for'),
+    supabase.from('polls').select('*').order('closes_at', { ascending: false }),
+    supabase.from('poll_votes').select('*')
   ];
 
   const results = await Promise.all(queries);
@@ -108,6 +111,9 @@ export async function loadWorkspace(userId) {
     obligations: collections[12].data || [],
     obligationChecklistItems: collections[13].data || [],
     obligationInspections: collections[14].data || [],
+    assemblies: collections[15].data || [],
+    polls: collections[16].data || [],
+    pollVotes: collections[17].data || [],
     profiles
   };
 }
@@ -189,3 +195,5 @@ export const createChecklistItem = values => insert('obligation_checklist_items'
 export const createObligationInspection = values => insert('obligation_inspections', values);
 
 export { supabase };
+
+export async function pollResults(id) { return throwIfError(await supabase.rpc('get_poll_results', {target:id})); }

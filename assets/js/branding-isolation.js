@@ -3,7 +3,7 @@ import { supabase } from './supabase.js';
 const DEFAULTS = {
   primary: '#3768f5',
   primaryDark: '#2856d9',
-  title: 'Condomínio Fácil'
+  title: 'Condomia'
 };
 
 let access = null;
@@ -34,19 +34,19 @@ function resetBranding() {
   const mark = brand.querySelector('.brand-mark');
   if (mark) {
     mark.classList.remove('white-label-logo');
-    mark.innerHTML = 'CF';
+    mark.innerHTML = 'C';
     mark.style.background = '';
   }
 
   const title = brand.querySelector('strong');
   const sub = brand.querySelector('small');
-  if (title) title.textContent = 'Condomínio Fácil';
-  if (sub) sub.textContent = 'GESTÃO SAAS';
+  if (title) title.textContent = 'Condomia';
+  if (sub) sub.textContent = 'Condomínio fácil';
 }
 
 function applyCompanyBranding() {
   if (document.querySelector('.mockup-shell')) {
-    const title = brandedCompany && !access?.is_super_admin ? `${brandedCompany.label || brandedCompany.name} · Condomínio Fácil` : DEFAULTS.title;
+    const title = brandedCompany && !access?.is_super_admin ? `${brandedCompany.label || brandedCompany.name} · Condomia` : DEFAULTS.title;
     if (document.title !== title) document.title = title;
     return;
   }
@@ -57,7 +57,7 @@ function applyCompanyBranding() {
   const label = brandedCompany.label || brandedCompany.name || 'Condomínio';
   document.documentElement.style.setProperty('--primary', color);
   document.documentElement.style.setProperty('--primary-dark', color);
-  document.title = `${label} · Condomínio Fácil`;
+  document.title = `${label} · Condomia`;
 
   const brand = document.querySelector('.sidebar .brand');
   if (!brand) return;

@@ -89,7 +89,7 @@ function applyBranding() {
   const brandColor = brandedCompany.brand_color || '#3768f5';
   document.documentElement.style.setProperty('--primary', brandColor);
   document.documentElement.style.setProperty('--primary-dark', brandColor);
-  document.title = `${brandedCompany.label || brandedCompany.name} · Condomínio Fácil`;
+  document.title = `${brandedCompany.label || brandedCompany.name} · Condomia`;
 
   const brand = document.querySelector('.sidebar .brand');
   if (brand) {

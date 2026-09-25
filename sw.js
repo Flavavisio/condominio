@@ -1,4 +1,4 @@
-const CACHE = 'condominio-facil-v7-mockup';
+const CACHE = 'condomia-v8-governance';
 const CORE = ['./','./index.html','./manifest.webmanifest','./assets/icons/cf-icon.svg'];
 
 self.addEventListener('install', event => {
@@ -34,8 +34,8 @@ self.addEventListener('fetch', event => {
 
 self.addEventListener('push', event => {
   let data = {};
-  try { data = event.data?.json() || {}; } catch { data = { title: 'Condomínio Fácil', body: event.data?.text() || 'Tem um novo alerta.' }; }
-  const title = data.title || 'Condomínio Fácil';
+  try { data = event.data?.json() || {}; } catch { data = { title: 'Condomia', body: event.data?.text() || 'Tem um novo alerta.' }; }
+  const title = data.title || 'Condomia';
   const options = {
     body: data.body || 'Tem um novo alerta.',
     icon: './assets/icons/cf-icon.svg',

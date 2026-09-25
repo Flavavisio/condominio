@@ -1,5 +1,6 @@
 import * as api from './api.js';
 import * as ui from './mockup-ui.js';
+import * as governance from './governance.js';
 
 const app = document.querySelector('#app');
 
@@ -22,6 +23,7 @@ const state = {
   obligations: [],
   obligationChecklistItems: [],
   obligationInspections: [],
+  assemblies: [], polls: [], pollVotes: [],
   dashboardCompanyId: '',
   dashboardCondoId: '',
   residentCondoId: '',
@@ -150,6 +152,7 @@ function resetWorkspace() {
   state.obligations = [];
   state.obligationChecklistItems = [];
   state.obligationInspections = [];
+  state.assemblies = []; state.polls = []; state.pollVotes = [];
   state.selectedCondoId = null;
   state.dashboardCompanyId = '';
   state.dashboardCondoId = '';
@@ -168,8 +171,8 @@ function authView() {
   return `
     <main class="auth-page">
       <section class="auth-brand">
-        <div class="brand-mark large">CF</div>
-        <span class="eyebrow">CONDOMÍNIO FÁCIL</span>
+        <div class="brand-mark large">C</div>
+        <span class="eyebrow">CONDOMIA</span><span class="cf-auth-slogan">Condomínio fácil</span>
         <h1>Menos chamadas.<br>Mais transparência.</h1>
         <p>A plataforma operacional para empresas gestoras, condomínios e condóminos.</p>
         <div class="auth-points">
@@ -178,7 +181,7 @@ function authView() {
       </section>
       <section class="auth-panel">
         <div class="login-card">
-          <div class="mobile-brand"><div class="brand-mark">CF</div><strong>Condomínio Fácil</strong></div>
+          <div class="mobile-brand cf-brand">${ui.brand()}</div>
           <span class="eyebrow blue">${signup ? 'CRIAR CONTA' : 'ACESSO À PLATAFORMA'}</span>
           <h2>${signup ? 'Primeiro acesso' : 'Bem-vindo'}</h2>
           <p>${signup ? 'Crie a sua conta. O acesso a empresas e condomínios é atribuído pela administração.' : 'Entre com a sua conta da plataforma.'}</p>
@@ -201,7 +204,7 @@ function pendingView() {
   return `
     <main class="pending-page">
       <section class="pending-card">
-        <div class="brand-mark large">CF</div>
+        <div class="brand-mark large">C</div>
         <span class="eyebrow blue">CONTA CRIADA</span>
         <h1>Olá, ${esc(name)}.</h1>
         <p>A sua conta está ativa, mas ainda não foi associada a uma empresa gestora ou condomínio.</p>
@@ -670,7 +673,8 @@ function collectionView() {
     const items = ui.scopedItems(state,'documents');
     content = `<section class="panel"><div class="panel-head"><h2>Documentos</h2></div>${items.length ? `<div class="rows">${items.map(d=>`<button class="data-row row-button" data-document="${esc(d.id)}"><div class="cf-square-icon blue">${ui.icon('document')}</div><div><strong>${esc(d.name)}</strong><small>${esc(condoName(d.condominium_id))} · ${esc(d.category)}</small></div>${ui.icon('chevron')}</button>`).join('')}</div>` : empty('Sem documentos publicados.')}</section>`;
   }
-  if (['assemblies','votes','reservations'].includes(state.view)) content = `<section class="panel"><div class="panel-head"><h2>${title}</h2></div><p class="cf-empty">Este módulo ainda não está disponível na plataforma.</p></section>`;
+  if (['assemblies','votes'].includes(state.view)) content = governance.collection(state,state.view);
+  if (state.view === 'reservations') content = `<section class="panel"><div class="panel-head"><h2>${title}</h2></div><p class="cf-empty">Este módulo ainda não está disponível na plataforma.</p></section>`;
   if (state.view === 'reports') {
     const issues = ui.scopedItems(state,'issues');
     content = `<section class="panel"><div class="panel-head"><h2>Relatório de ocorrências</h2><button class="primary-btn" id="exportReport">Exportar CSV</button></div><div class="table-wrap"><table><thead><tr><th>Condomínio</th><th>Ocorrência</th><th>Estado</th></tr></thead><tbody>${issues.map(i=>`<tr><td>${esc(condoName(i.condominium_id))}</td><td>${esc(i.title)}</td><td>${esc(ui.issueLabel(i.status))}</td></tr>`).join('')}</tbody></table></div>${!issues.length?'<p class="cf-empty">Sem ocorrências para apresentar.</p>':''}</section>`;
@@ -694,6 +698,7 @@ function searchView() {
 }
 
 function bind() {
+  governance.bind(state,{reload:loadContext,modalShell,closeModal});
   document.querySelector('#authSwitch')?.addEventListener('click', () => {
     state.authMode = state.authMode === 'login' ? 'signup' : 'login';
     state.error = ''; state.info = ''; render();
@@ -773,7 +778,7 @@ function bind() {
 
 function render() {
   if (state.loading) {
-    app.innerHTML = '<div class="boot-screen"><div class="boot-mark">CF</div><strong>Condomínio Fácil</strong><span>A sincronizar com Supabase…</span></div>';
+    app.innerHTML = '<div class="boot-screen"><div class="boot-mark">C</div><strong>Condomia</strong><span>A sincronizar com Supabase…</span></div>';
     return;
   }
 

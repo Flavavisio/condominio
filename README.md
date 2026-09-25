@@ -1,4 +1,4 @@
-# Condomínio Fácil
+# Condomia
 
 Plataforma SaaS para empresas gestoras de condomínios.
 
@@ -130,3 +130,15 @@ http://localhost:8080
 ```
 
 Não abrir diretamente como `file://`, porque a aplicação usa ES Modules.
+
+
+## Assembleias e votações
+
+- A administração e os gestores com acesso ao condomínio podem criar assembleias, publicar a ordem de trabalhos e guardar a ata.
+- Rascunhos ficam reservados à gestão. As assembleias agendadas aparecem no dashboard, na agenda e na área do condómino.
+- As votações têm início e fim, associação opcional a uma assembleia e as opções A favor, Contra e Abstenção.
+- Proprietários e representantes ativos podem votar uma vez por fração. O servidor regista a identidade e a permilagem; os votos não podem ser alterados.
+- A gestão pode acompanhar os resultados. Os condóminos consultam os totais após o encerramento.
+- O acesso à equipa e à criação de gestores/funcionários está no menu lateral do administrador da empresa.
+
+A migração `supabase/migrations/20260925075423_assemblies_and_votes.sql` cria as tabelas, permissões e funções. O teste `supabase/tests/governance.sql` verifica os acessos e a integridade dos votos numa transação revertida no final; executar com o proprietário da base de dados.

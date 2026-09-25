@@ -69,7 +69,7 @@ async function resolveContext() {
 }
 
 function ensureTeamNav() {
-  const nav = document.querySelector('.mockup-shell') ? document.querySelector('#settingsTools') : document.querySelector('.sidebar nav');
+  const nav = document.querySelector('.sidebar nav');
   if (!nav) return;
   if (!company || !membership) {
     nav.querySelector('.cf-team-core-nav')?.remove();
@@ -81,7 +81,7 @@ function ensureTeamNav() {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'nav-item cf-team-core-nav';
-  btn.innerHTML = '<span>♙</span>Equipa';
+  btn.innerHTML = '<svg class="cf-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m18 0v-2a4 4 0 0 0-3-4M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m8-7a4 4 0 0 1 0 7"/></svg><span>Equipa</span>';
   btn.addEventListener('click', openTeam);
 
   const dashboard = [...nav.querySelectorAll('.nav-item')].find(x => x.textContent.trim().includes('Dashboard'));

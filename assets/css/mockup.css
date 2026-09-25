@@ -64,3 +64,35 @@
 .cf-group-title{font-size:17px;margin:20px 0 10px}.cf-collection-group{margin-bottom:22px}.cf-settings-tools{margin-top:14px}.cf-issues-table th{text-transform:none;letter-spacing:0}.cf-occurrences .table-wrap{border:0;border-radius:0}
 
 .cf-role-context{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+
+/* Assemblies and voting follow the existing panel and form layout. */
+.cf-governance-row { width:100%; grid-template-columns:auto minmax(0,1fr) auto auto; text-align:left; }
+.cf-governance-row strong,.cf-governance-row small { display:block; overflow-wrap:anywhere; }
+.cf-governance-fields { border:0; padding:0; margin:0; display:grid; gap:16px; min-width:0; }
+.cf-governance-fields label { display:grid; gap:8px; }
+.cf-governance-fields textarea,.cf-governance-detail textarea { width:100%; }
+.cf-governance-text p { white-space:pre-wrap; overflow-wrap:anywhere; }
+.cf-governance-detail { display:grid; gap:16px; }
+.cf-vote-options { display:flex; flex-wrap:wrap; gap:20px; border:1px solid #dde7ed; border-radius:10px; padding:16px; }
+.cf-vote-options label,.cf-vote-confirm { display:flex; align-items:center; gap:8px; }
+.cf-vote-options input,.cf-vote-confirm input { width:auto; }
+.cf-governance-detail [data-governance-error] { color:#b42318; }
+@media(max-width:600px){.cf-governance-row{grid-template-columns:auto minmax(0,1fr)}.cf-governance-row>.cf-status{grid-column:2}.cf-governance-row>.cf-icon{display:none}}
+
+.cf-governance-modal { width:min(720px,100%); min-width:0; color:#103651; }
+.cf-governance-modal .cf-governance-detail { padding:20px; }
+.cf-governance-modal .cf-governance-detail>* { min-width:0; }
+.cf-governance-modal .form-grid { min-width:0; }
+.cf-governance-modal .form-grid input,.cf-governance-modal .form-grid select { min-width:0; }
+.cf-governance-modal .form-grid .cf-vote-options label,.cf-governance-modal .form-grid .cf-vote-confirm { display:flex; align-items:center; gap:8px; }
+.cf-governance-modal .form-grid input[type=radio],.cf-governance-modal .form-grid input[type=checkbox] { width:18px; height:18px; flex:0 0 18px; accent-color:#197c97; }
+.cf-governance-modal .cf-vote-confirm { line-height:1.5; }
+.cf-governance-modal .primary-btn { background:#197c97; }
+.cf-governance-modal .text-btn,.cf-governance-modal .eyebrow.blue { color:#197c97; }
+.cf-governance-modal .modal-head h2 { overflow-wrap:anywhere; }
+.cf-governance-modal .modal-head>button { flex:0 0 34px; }
+.cf-governance-modal textarea { font:inherit; border:1px solid #d0d5dd; border-radius:12px; padding:12px; resize:vertical; }
+
+.cf-brand-copy { display:flex; flex-direction:column; gap:2px; }
+.cf-brand-copy small { font-size:11px; letter-spacing:.2px; font-weight:400; color:#62758d; }
+.cf-auth-slogan { color:#cbd5e1; font-size:16px; margin-top:6px; }

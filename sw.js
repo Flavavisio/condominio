@@ -1,4 +1,4 @@
-const CACHE = 'condomia-v17-photos';
+const CACHE = 'condomia-v18-services';
 const CORE = ['./','./index.html','./app.html','./demo.html','./manifest.webmanifest','./assets/icons/cf-icon.svg'];
 
 self.addEventListener('install', event => {

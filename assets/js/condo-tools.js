@@ -177,11 +177,11 @@ function injectFractionTools() {
   });
 }
 
-function serviceForm(condo, suppliers) {
+function serviceForm(condo, suppliers, service=null) {
   return `
     <div class="cf-modal-backdrop" data-cf-close>
       <div class="cf-modal" role="dialog" aria-modal="true" onclick="event.stopPropagation()">
-        <div class="cf-modal-head"><div><span>Serviço periódico</span><h2>Novo serviço</h2></div><button type="button" data-cf-close>✕</button></div>
+        <div class="cf-modal-head"><div><span>Serviço periódico</span><h2>${service?'Editar serviço':'Novo serviço'}</h2></div><button type="button" data-cf-close>✕</button></div>
         <form class="cf-service-form">
           <label class="wide">Descrição<input name="title" required placeholder="Limpeza das escadas e patamares"></label>
           <label>Tipo<select name="service_type"><option>Limpeza</option><option>Jardinagem</option><option>Piscina</option><option>Controlo de pragas</option><option>Garagens</option><option>Resíduos</option><option>Áreas comuns</option><option>Outro</option></select></label>
@@ -216,26 +216,30 @@ function bindClose(root) {
   }));
 }
 
-async function openServiceForm(condo) {
-  const { data: suppliers, error } = await supabase.from('suppliers').select('id,name').eq('condominium_id', condo.id).eq('status','active').order('name');
+async function openServiceForm(condo, service=null) {
+  const { data: suppliers, error } = await supabase.from('suppliers').select('id,name').eq('condominium_id', condo.id).order('name');
   if (error) return toast(error.message, true);
   const host = document.createElement('div');
-  host.innerHTML = serviceForm(condo, suppliers || []);
+  host.innerHTML = serviceForm(condo, suppliers || [], service);
   const modal = host.firstElementChild;
   document.body.appendChild(modal);
   bindClose(modal);
+  if(service) for(const el of modal.querySelectorAll('[name]')) el.value=service[el.name]??'';
   modal.querySelector('form').addEventListener('submit', async event => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
-    if (!values.supplier_id) delete values.supplier_id;
-    if (!values.next_service_on) delete values.next_service_on;
-    if (!values.time_of_day) delete values.time_of_day;
+    values.title=values.title.trim();
+    if(!values.title)return toast('Preencha a descrição do serviço.',true);
+    for(const key of ['supplier_id','next_service_on','time_of_day','weekday']) if(!values[key])values[key]=null;
     values.estimated_minutes = values.estimated_minutes ? Number(values.estimated_minutes) : null;
     values.condominium_id = condo.id;
-    const { error: saveError } = await supabase.from('periodic_services').insert(values);
-    if (saveError) return toast(saveError.message, true);
+    const button=event.currentTarget.querySelector('[type=submit]');button.disabled=true;
+    try {
+    const result = service ? await supabase.from('periodic_services').update(values).eq('id',service.id).eq('condominium_id',condo.id).select('id').single() : await supabase.from('periodic_services').insert(values).select('id').single();
+    if(result.error)throw result.error;
+    } catch(error){button.disabled=false;return toast(error.message||'Não foi possível guardar o serviço.',true);}
     modal.remove();
-    toast('Serviço periódico criado.');
+    toast(service?'Serviço atualizado.':'Serviço periódico criado.');
     renderServices(condo);
   });
 }
@@ -299,11 +303,12 @@ async function renderServices(condo) {
           <h3>${esc(s.title)}</h3><p>${(costs||[]).filter(c=>c.periodic_service_id===s.id&&c.active).map(c=>`${Number(c.amount).toLocaleString('pt-PT',{style:'currency',currency:'EUR'})} / ${c.interval_months} mês(es)`).join(' · ')||'Custo por definir no Financeiro'}</p>
           <p>${esc(s.area || 'Zona não definida')}</p>
           <div class="cf-service-meta"><span><small>Frequência</small><strong>${esc(s.frequency)}</strong></span><span><small>Próxima</small><strong>${formatDate(s.next_service_on)}</strong></span><span><small>Fornecedor</small><strong>${esc(supplierMap.get(s.supplier_id) || '—')}</strong></span></div>
-          <div class="cf-service-actions"><button class="ghost-btn compact" data-cf-history="${s.id}">Histórico</button><button class="ghost-btn compact" data-cf-toggle="${s.id}">${s.active ? 'Pausar' : 'Reativar'}</button>${s.active ? `<button class="primary-btn compact" data-cf-done="${s.id}">✓ Executado</button>` : ''}</div>
+          <div class="cf-service-actions"><button class="ghost-btn compact" data-cf-edit-service="${s.id}">Editar</button><button class="ghost-btn compact" data-cf-history="${s.id}">Histórico</button><button class="ghost-btn compact" data-cf-toggle="${s.id}">${s.active ? 'Pausar' : 'Reativar'}</button>${s.active ? `<button class="primary-btn compact" data-cf-done="${s.id}">✓ Executado</button>` : ''}</div>
         </article>`).join('')}</div>` : '<div class="cf-empty">Ainda não existem serviços periódicos. Crie, por exemplo, a limpeza semanal do edifício.</div>'}
     </section>`;
   host.querySelector('[data-cf-new-service]')?.addEventListener('click', () => openServiceForm(condo));
   for (const service of services || []) {
+    host.querySelector(`[data-cf-edit-service="${service.id}"]`)?.addEventListener('click',()=>openServiceForm(condo,service));
     host.querySelector(`[data-cf-done="${service.id}"]`)?.addEventListener('click', () => markServiceDone(service, condo));
     host.querySelector(`[data-cf-history="${service.id}"]`)?.addEventListener('click', () => showHistory(service));
     host.querySelector(`[data-cf-toggle="${service.id}"]`)?.addEventListener('click', () => toggleService(service, condo));

@@ -154,7 +154,7 @@ function chargesTable(filtered, fractionMap) {
     const paid = filtered.paidMap.get(c.id) || 0;
     const debt = Math.max(Number(c.amount_due || 0) - paid, 0);
     const status = chargeVisualStatus(c, paid);
-    return `<tr><td><strong>${esc(fractionMap.get(c.fraction_id)?.code || '—')}</strong></td><td><strong>${esc(c.description)}</strong><small>${esc(chargeTypeLabel[c.charge_type] || c.charge_type)} · ${String(c.period_month).padStart(2,'0')}/${c.period_year}</small></td><td>${fmtDate(c.due_date)}</td><td>${money(c.amount_due)}</td><td>${money(paid)}</td><td>${money(debt)}</td><td>${statusPill(status)}</td></tr>`;
+    return `<tr data-charge-id="${esc(c.id)}"><td><strong>${esc(fractionMap.get(c.fraction_id)?.code || '—')}</strong></td><td><strong>${esc(c.description)}</strong><small>${esc(chargeTypeLabel[c.charge_type] || c.charge_type)} · ${String(c.period_month).padStart(2,'0')}/${c.period_year}</small></td><td>${fmtDate(c.due_date)}</td><td>${money(c.amount_due)}</td><td>${money(paid)}</td><td>${money(debt)}</td><td>${statusPill(status)}</td></tr>`;
   }).join('')}</tbody></table></div>`;
 }
 

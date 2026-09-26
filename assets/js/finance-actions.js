@@ -132,9 +132,9 @@ async function enhanceActions() {
     }
 
     const rows = [...table.querySelectorAll('tbody tr')];
-    rows.forEach((row, index) => {
+    rows.forEach(row => {
       row.querySelector('.cf-fin-actions-cell')?.remove();
-      const charge = charges[index];
+      const charge = charges.find(item => item.id === row.dataset.chargeId);
       const td = document.createElement('td');
       td.className = 'cf-fin-actions-cell';
 

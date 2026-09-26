@@ -1,1 +1,43 @@
-<!doctype html><html lang="pt-PT"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>Experimentar Condomia — Demonstração</title><link rel="icon" href="assets/icons/cf-icon.svg"><link rel="stylesheet" href="assets/css/app.css"><link rel="stylesheet" href="assets/css/mockup.css"><link rel="stylesheet" href="assets/css/demo.css"><script type="module" src="assets/js/demo.js"></script></head><body><div class="demo-bar"><span><b>DEMONSTRAÇÃO</b> · Dados fictícios</span><label>Explorar como <select id="demoRole"><option value="manager">Empresa gestora</option><option value="resident">Condómino</option></select></label><button id="demoReset">Repor exemplo ↻</button></div><div id="demoApp"></div><dialog id="demoDialog"><form method="dialog"><button aria-label="Fechar" class="demo-close">✕</button></form><div id="demoDialogBody"></div></dialog></body></html>
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#101828" />
+  <meta name="description" content="Condomia — Condomínio fácil. Plataforma SaaS para empresas gestoras de condomínios." />
+  <title>Demonstração interativa — Condomia</title>
+  <meta name="robots" content="noindex">
+  <meta http-equiv="Content-Security-Policy" content="connect-src 'none'; form-action 'none'; object-src 'none'">
+  <script type="importmap">{"imports":{"./assets/js/supabase.js":"./assets/js/demo-backend.js?v=20260926-live-demo-7"}}</script>
+
+  <link rel="icon" href="./assets/icons/cf-icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./assets/css/app.css?v=20260926-live-demo-7" />
+  <link rel="stylesheet" href="./assets/css/modules.css?v=20260926-live-demo-7" />
+  <link rel="stylesheet" href="./assets/css/admin.css?v=20260926-live-demo-7" />
+  <link rel="stylesheet" href="./assets/css/condo-tools.css?v=20260926-live-demo-7" />
+  <link rel="stylesheet" href="./assets/css/finance.css?v=20260926-live-demo-7" />
+  <link rel="stylesheet" href="./assets/css/finance-actions.css?v=20260926-live-demo-7" />
+  <link rel="stylesheet" href="./assets/css/company-team.css?v=20260926-live-demo-7" />
+  <link rel="stylesheet" href="./assets/css/licensing.css?v=20260926-live-demo-7" />
+  <link rel="stylesheet" href="./assets/css/license-gate.css?v=20260926-live-demo-7" />
+  <link rel="stylesheet" href="./assets/css/pwa.css?v=20260926-live-demo-7" />
+  <link rel="stylesheet" href="./assets/css/mockup.css?v=20260926-live-demo-7" />
+<link rel="stylesheet" href="assets/css/demo.css?v=20260926-live-demo-7"></head>
+<body><div class="demo-bar"><span><b>DEMONSTRAÇÃO INTERATIVA</b> · Aplicação real, dados fictícios</span><label>Explorar como <select id="demoRole"><option value="manager">Empresa gestora</option><option value="resident">Condómino</option></select></label><button id="demoReset">Repor dados ↻</button><a href="app.html" target="_blank" rel="noopener">Entrar na minha conta ↗</a></div>
+  <div id="app">
+    <div class="boot-screen">
+      <div class="boot-mark">C</div>
+      <strong>Condomia</strong>
+      <span>A preparar a demonstração…</span>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script type="module" src="./assets/js/app.js?v=20260926-live-demo-7"></script>
+  <script type="module" src="./assets/js/admin-enhancements.js?v=20260926-live-demo-7"></script>
+  <script type="module" src="./assets/js/condo-tools.js?v=20260926-live-demo-7"></script>
+  <script type="module" src="./assets/js/finance.js?v=20260926-live-demo-7"></script>
+  <script type="module" src="./assets/js/finance-actions.js?v=20260926-live-demo-7"></script>
+  <script type="module" src="./assets/js/company-team-core.js?v=20260926-live-demo-7"></script>
+  <script type="module" src="./assets/js/branding-isolation.js?v=20260926-live-demo-7"></script>
+<script type="module" src="assets/js/demo.js?v=20260926-live-demo-7"></script></body>
+</html>

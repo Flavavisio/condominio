@@ -194,3 +194,11 @@ Cada pack custa **80 €/mês, IVA incluído** (8 € por condomínio adicional)
 O configurador público permite escolher a combinação; o simulador recomenda a opção mais económica com capacidade suficiente, incluindo planos maiores. Selecionar não ativa capacidade nem cobra valores: o Super Admin emite/edita a licença com a quantidade de packs. A quantidade é preservada na edição e renovação. Os metadados de registo `requested_extra_packs` são apenas interesse comercial. A base de dados calcula o preço e capacidade, bloqueia quantidades inválidas, alterações sem autorização e redução abaixo do número de condomínios existentes. Limite técnico: 1000 packs por empresa.
 
 Migração: `20260926001643_condominium_extra_packs.sql`. Testes: `node tests/extra-packs.test.mjs` e `supabase/tests/extra-packs.sql` (transação com rollback).
+
+### Demonstração com os módulos reais
+
+`demo.html` carrega os mesmos módulos e estilos de `app.html` para o dashboard, condomínio, frações, ocorrências, avisos, documentos, fornecedores, equipamentos, manutenção, obrigações, financeiro, assembleias, votações, serviços, equipa e relatórios. Um import map substitui exclusivamente o cliente Supabase pelo adaptador local `demo-backend.js`; não modifica o cliente da aplicação autenticada. A política `connect-src 'none'` bloqueia ligações à base de dados e serviços externos. A biblioteca Excel pública é a mesma dependência da aplicação.
+
+Os dados são fictícios e persistem em `sessionStorage` sob uma chave própria. O botão Repor dados limpa só a demonstração. A troca entre gestora e condómino permite acompanhar os exemplos de quotas, comprovativos e votos. Ficheiros selecionados ficam em memória no navegador, sem upload remoto; contas reais, envio de emails, notificações push e licenciamento não são executados na demo. Operações sem simulação devolvem uma mensagem explícita. `demo-document.html` fornece uma ata ilustrativa.
+
+Os botões de liquidação das quotas identificam a cobrança pelo ID da linha, independentemente da ordenação da tabela.

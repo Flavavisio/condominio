@@ -20,3 +20,5 @@ jobs:
         run: npm run check
       - name: Validate extra pack pricing
         run: node tests/extra-packs.test.mjs
+      - name: Validate local demo data
+        run: node tests/demo.test.mjs

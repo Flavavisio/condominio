@@ -4,3 +4,5 @@
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
 
 .lp-addon{margin-top:28px;padding:32px;border:1px solid #cbdde4;border-radius:22px;background:#eaf5f7;display:grid;grid-template-columns:1fr 1fr;gap:36px}.lp-addon h3{font-size:28px;margin:0 0 16px}.lp-addon p{line-height:1.7}.lp-pack-config{display:grid;gap:14px}.lp-pack-config label{display:grid;gap:8px;font-weight:650}.lp-pack-config input,.lp-pack-config select{width:100%;min-width:0;padding:12px;border:1px solid #cbdde4;border-radius:10px;background:white;font:inherit}.lp-pack-config output{font-weight:750;line-height:1.6}@media(max-width:700px){.lp-addon{grid-template-columns:1fr;padding:22px;gap:20px}}
+
+.lp-demo-section>.lp-wrap{width:min(1520px,calc(100% - 40px))}.lp-demo-frame iframe{height:900px}@media(max-width:640px){.lp-demo-section>.lp-wrap{width:calc(100% - 16px)}.lp-demo-frame iframe{height:820px}}

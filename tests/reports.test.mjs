@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
+import {cashSummary} from '../assets/js/expense-math.js';
+globalThis.reportCashSummary=cashSummary;
 import {readFile} from 'node:fs/promises';
 let source=await readFile(new URL('../assets/js/reports.js',import.meta.url),'utf8');
 source=source.replace(/^import .*;\n/gm,'');
 const requests=[];
 globalThis.reportTestClient={from(name){let offset=0,filter;return {select(){return this},eq(k,v){filter=[k,v];return this},order(){return this},range(a){offset=a;requests.push({name,offset,filter});return Promise.resolve({data:name==='documents'?(offset===0?Array.from({length:1000},(_,id)=>({id})):[{id:1000}]):[],error:null})}}}};
-source='const supabase=globalThis.reportTestClient;const pollResults=async()=>[];const issueDisplayLabel=i=>i.status;\n'+source;
+source='const cashSummary=globalThis.reportCashSummary;const supabase=globalThis.reportTestClient;const pollResults=async()=>[];const issueDisplayLabel=i=>i.status;\n'+source;
 const {financialSummary,loadReport,reportMarkup}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 const d=await loadReport('condo-1');
 assert.equal(d.documents.length,1001);

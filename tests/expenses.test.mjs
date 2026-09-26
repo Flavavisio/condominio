@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {cashSummary} from '../assets/js/expense-math.js';
+const payments=[{paid_on:'2026-08-01',amount:500},{paid_on:'2026-09-02',amount:1500}];
+const expenses=[{amount:200,due_on:'2026-09-01',paid_on:'2026-09-03',status:'paid'},{amount:120,due_on:'2026-09-01',paid_on:'2026-09-03',status:'paid'},{amount:80,due_on:'2026-09-01',paid_on:'2026-09-03',status:'paid'},{amount:400,due_on:'2026-09-01',status:'pending'},{amount:999,due_on:'2026-09-01',status:'cancelled'}];
+const b=cashSummary(payments,expenses,{opening_on:'2026-09-01',opening_amount:2000},'2026-09-01','2026-09-30');
+assert.equal(b.closing,310000);assert.equal(b.received,150000);assert.equal(b.spent,40000);assert.equal(b.payable,40000);
+const carried=cashSummary(payments,expenses,{opening_on:'2026-08-01',opening_amount:2000},'2026-09-01','2026-09-30');assert.equal(carried.opening,250000);assert.equal(carried.closing,360000);
+assert.equal(cashSummary([],[],null,'2026-09-01','2026-09-30').configured,false);
+assert.equal(cashSummary([],[],{opening_on:'2026-10-01'},'2026-09-01','2026-09-30').valid,false);
+console.log('PASS: 2000+1500-400=3100, pending/cancelled excluded, opening date prevents double count, prior balance carried.');

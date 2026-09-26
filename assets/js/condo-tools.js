@@ -283,9 +283,10 @@ async function renderServices(condo) {
   const host = document.querySelector('.cf-services-host');
   if (!host) return;
   host.innerHTML = '<div class="cf-loading">A carregar serviços…</div>';
-  const [{data: services, error}, {data: suppliers}] = await Promise.all([
+  const [{data: services, error}, {data: suppliers}, {data: costs}] = await Promise.all([
     supabase.from('periodic_services').select('*').eq('condominium_id', condo.id).order('next_service_on', { ascending: true, nullsFirst: false }),
-    supabase.from('suppliers').select('id,name').eq('condominium_id', condo.id)
+    supabase.from('suppliers').select('id,name').eq('condominium_id', condo.id),
+    supabase.from('service_contracts').select('*').eq('condominium_id',condo.id)
   ]);
   if (error) { host.innerHTML = `<div class="cf-empty">${esc(error.message)}</div>`; return; }
   const supplierMap = new Map((suppliers || []).map(s => [s.id, s.name]));
@@ -295,7 +296,7 @@ async function renderServices(condo) {
       ${services?.length ? `<div class="cf-service-grid">${services.map(s => `
         <article class="cf-service-card ${s.active ? '' : 'paused'}">
           <div class="cf-service-top"><span>${esc(s.service_type)}</span><b>${s.active ? 'Ativo' : 'Pausado'}</b></div>
-          <h3>${esc(s.title)}</h3>
+          <h3>${esc(s.title)}</h3><p>${(costs||[]).filter(c=>c.periodic_service_id===s.id&&c.active).map(c=>`${Number(c.amount).toLocaleString('pt-PT',{style:'currency',currency:'EUR'})} / ${c.interval_months} mês(es)`).join(' · ')||'Custo por definir no Financeiro'}</p>
           <p>${esc(s.area || 'Zona não definida')}</p>
           <div class="cf-service-meta"><span><small>Frequência</small><strong>${esc(s.frequency)}</strong></span><span><small>Próxima</small><strong>${formatDate(s.next_service_on)}</strong></span><span><small>Fornecedor</small><strong>${esc(supplierMap.get(s.supplier_id) || '—')}</strong></span></div>
           <div class="cf-service-actions"><button class="ghost-btn compact" data-cf-history="${s.id}">Histórico</button><button class="ghost-btn compact" data-cf-toggle="${s.id}">${s.active ? 'Pausar' : 'Reativar'}</button>${s.active ? `<button class="primary-btn compact" data-cf-done="${s.id}">✓ Executado</button>` : ''}</div>

@@ -1,3 +1,5 @@
+import {mountFinancialOperations} from './financial-operations.js';
+import {bindReceipts} from './receipt.js';
 import {mountExpenses} from './expenses.js';
 import { supabase } from './supabase.js';
 import {mountProofQueue,allRows} from './payment-proofs.js';
@@ -161,7 +163,7 @@ function chargesTable(filtered, fractionMap) {
 
 function paymentsTable(filtered, fractionMap) {
   if (!filtered.payments.length) return '<div class="cf-fin-empty small">Sem pagamentos recebidos no período.</div>';
-  return `<div class="cf-fin-table-wrap"><table class="cf-fin-table compact"><thead><tr><th>Data</th><th>Fração</th><th>Valor</th><th>Método</th><th>Referência</th></tr></thead><tbody>${filtered.payments.slice(0,50).map(p => `<tr><td>${fmtDate(p.paid_on)}</td><td><strong>${esc(fractionMap.get(p.fraction_id)?.code || '—')}</strong></td><td><strong>${money(p.amount)}</strong></td><td>${esc(paymentMethodLabel[p.method] || p.method)}</td><td>${esc(p.reference || '—')}</td></tr>`).join('')}</tbody></table></div>`;
+  return `<div class="cf-fin-table-wrap"><table class="cf-fin-table compact"><thead><tr><th>Data</th><th>Fração</th><th>Valor</th><th>Método</th><th>Referência</th><th>Comprovativo</th></tr></thead><tbody>${filtered.payments.map(p => `<tr><td>${fmtDate(p.paid_on)}</td><td><strong>${esc(fractionMap.get(p.fraction_id)?.code || '—')}</strong></td><td><strong>${money(p.amount)}</strong></td><td>${esc(paymentMethodLabel[p.method] || p.method)}</td><td>${esc(p.reference || '—')}</td><td><button class="text-btn" data-receipt="${p.id}">Emitir comprovativo</button></td></tr>`).join('')}</tbody></table></div>`;
 }
 
 async function openBulkCharge(condo, fractions) {
@@ -257,7 +259,7 @@ async function renderFinance(condo) {
     host.innerHTML = `<section class="panel cf-fin-panel">
       <div class="panel-head cf-fin-head"><div><h2>Financeiro / Quotas</h2><p>Quotas, recebimentos e valores em atraso do condomínio.</p></div><div class="cf-fin-head-actions">${financeCanManage ? '<button class="ghost-btn compact" data-fin-payment>＋ Pagamento</button><button class="primary-btn compact" data-fin-bulk>＋ Lançar quotas</button>' : '<span class="cf-fin-readonly">Consulta da sua fração</span>'}</div></div>
       <div class="cf-fin-filters"><label>Ano<select data-fin-year>${[currentYear()-2,currentYear()-1,currentYear(),currentYear()+1].map(y=>`<option value="${y}" ${y===filters.year?'selected':''}>${y}</option>`).join('')}</select></label><label>Período<select data-fin-month>${monthOptions(filters.month,true)}</select></label><label>Estado<select data-fin-status><option value="all" ${filters.status==='all'?'selected':''}>Todos</option><option value="overdue" ${filters.status==='overdue'?'selected':''}>Em atraso</option><option value="open" ${filters.status==='open'?'selected':''}>Em aberto</option><option value="partial" ${filters.status==='partial'?'selected':''}>Parcial</option><option value="paid" ${filters.status==='paid'?'selected':''}>Pago</option><option value="cancelled" ${filters.status==='cancelled'?'selected':''}>Cancelado</option></select></label></div>
-      ${financeCanManage?'<section id=condominiumCosts></section>':''}
+      ${financeCanManage?'<section id=condominiumCosts></section><section id=financialOperations></section>':''}
       ${summaryCards(filtered)}
       <div class="cf-fin-section-head"><div><h3>Quotas e lançamentos</h3><p>${filtered.charges.length} registo(s) no período</p></div></div>
       ${chargesTable(filtered, fractionMap)}
@@ -265,7 +267,10 @@ async function renderFinance(condo) {
       ${paymentsTable(filtered, fractionMap)}
       ${financeCanManage?'<section class="cp-proof-queue" id="managerProofQueue"><p>A carregar comprovativos…</p></section>':''}
     </section>`;
+    bindReceipts(host);
+    host.querySelector('#condominiumCosts')?.addEventListener('condomia-costs-changed',()=>mountFinancialOperations(host.querySelector('#financialOperations'),condo,filters.year,()=>renderFinance(condo)));
     if(financeCanManage) await mountExpenses(host.querySelector('#condominiumCosts'),condo,filters);
+    if(financeCanManage) mountFinancialOperations(host.querySelector('#financialOperations'),condo,filters.year,()=>renderFinance(condo));
     if(financeCanManage) await mountProofQueue(host.querySelector('#managerProofQueue'),condo,data.charges,data.fractions,()=>renderFinance(condo));
     host.querySelector('[data-fin-bulk]')?.addEventListener('click', () => openBulkCharge(condo, data.fractions));
     host.querySelector('[data-fin-payment]')?.addEventListener('click', () => openPayment(condo, data.fractions));

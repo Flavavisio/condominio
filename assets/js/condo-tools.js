@@ -219,15 +219,33 @@ function bindClose(root) {
 async function openServiceForm(condo, service=null) {
   const { data: suppliers, error } = await supabase.from('suppliers').select('id,name').eq('condominium_id', condo.id).order('name');
   if (error) return toast(error.message, true);
+  const {data:canPrice,error:permissionError}=await supabase.rpc('can_manage_condo_finance',{p_condominium_id:condo.id});
+  if(permissionError)return toast(permissionError.message,true);
+  let contracts=[];
+  if(canPrice && service){const result=await supabase.from('service_contracts').select('*').eq('condominium_id',condo.id).eq('periodic_service_id',service.id);if(result.error)return toast(result.error.message,true);contracts=result.data||[];}
+  let savedService=service;
+  const newContractId=crypto.randomUUID();
   const host = document.createElement('div');
   host.innerHTML = serviceForm(condo, suppliers || [], service);
   const modal = host.firstElementChild;
   document.body.appendChild(modal);
   bindClose(modal);
   if(service) for(const el of modal.querySelectorAll('[name]')) el.value=service[el.name]??'';
+  let selectedContract=contracts.find(c=>c.active)||contracts[0]||null;
+  if(canPrice){
+    const block=document.createElement('div');block.className='wide cf-service-cost-fields';
+    block.innerHTML=`<h3>Valor do serviço</h3>${contracts.length>1?`<label>Custo associado<select name="cost_contract">${contracts.map(c=>`<option value="${c.id}" ${c.id===selectedContract?.id?'selected':''}>${esc(c.title)} · ${Number(c.amount).toLocaleString('pt-PT',{style:'currency',currency:'EUR'})} · ${c.active?'Ativo':'Suspenso'}</option>`).join('')}</select></label>`:''}<label>Valor por pagamento (€, impostos incluídos)<input type="number" name="cost_amount" min="0.01" step="0.01" max="9999999999.99" placeholder="Ex.: 200,00"></label><label>Periodicidade do pagamento<select name="cost_interval">${[1,2,3,6,12].map(n=>`<option value="${n}">${n===1?'Mensal':n===12?'Anual':'A cada '+n+' meses'}</option>`).join('')}</select></label><label>Primeiro vencimento<input type="date" name="cost_start" value="${new Date().toLocaleDateString('en-CA')}"></label><p data-cost-help></p>`;
+    modal.querySelector('.cf-modal-actions').before(block);
+    const fill=()=>{block.querySelector('[name=cost_amount]').value=selectedContract?.amount??'';block.querySelector('[name=cost_amount]').required=!!selectedContract;block.querySelector('[name=cost_interval]').value=selectedContract?.interval_months||1;block.querySelector('[name=cost_interval]').disabled=!!selectedContract;block.querySelector('[name=cost_start]').value=selectedContract?.starts_on||new Date().toLocaleDateString('en-CA');block.querySelector('[name=cost_start]').readOnly=!!selectedContract;block.querySelector('[data-cost-help]').textContent=selectedContract?`Este é o mesmo custo do Financeiro${selectedContract.active?'':' (suspenso)'}. O valor aplica-se apenas a despesas futuras ainda não geradas. A periodicidade e o início do contrato mantêm-se.`:'Opcional. A limpeza pode ser semanal e paga mensalmente. Ao indicar um valor, o custo fica também disponível no Financeiro; as despesas são geradas ao abrir esse separador.';};fill();
+    block.querySelector('[name=cost_contract]')?.addEventListener('change',e=>{selectedContract=contracts.find(c=>c.id===e.target.value);fill();});
+  }
+
   modal.querySelector('form').addEventListener('submit', async event => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(event.currentTarget));
+    const costAmount=values.cost_amount, costInterval=values.cost_interval, costStart=values.cost_start;
+    for(const key of ['cost_contract','cost_amount','cost_interval','cost_start'])delete values[key];
+    if(canPrice && costAmount && (!costStart||!Number.isFinite(Number(costAmount))||Number(costAmount)<=0))return toast('Indique um valor positivo e a data do primeiro vencimento.',true);
     values.title=values.title.trim();
     if(!values.title)return toast('Preencha a descrição do serviço.',true);
     for(const key of ['supplier_id','next_service_on','time_of_day','weekday']) if(!values[key])values[key]=null;
@@ -235,8 +253,14 @@ async function openServiceForm(condo, service=null) {
     values.condominium_id = condo.id;
     const button=event.currentTarget.querySelector('[type=submit]');button.disabled=true;
     try {
-    const result = service ? await supabase.from('periodic_services').update(values).eq('id',service.id).eq('condominium_id',condo.id).select('id').single() : await supabase.from('periodic_services').insert(values).select('id').single();
+    const result = savedService ? await supabase.from('periodic_services').update(values).eq('id',savedService.id).eq('condominium_id',condo.id).select('id').single() : await supabase.from('periodic_services').insert(values).select('id').single();
     if(result.error)throw result.error;
+    savedService={...values,id:result.data.id};
+    if(canPrice && costAmount){
+      const cost={title:values.title,category:values.service_type,supplier_id:values.supplier_id,amount:Number(costAmount)};
+      const priceResult=selectedContract?await supabase.from('service_contracts').update(cost).eq('id',selectedContract.id).eq('condominium_id',condo.id).select('id').single():await supabase.from('service_contracts').upsert({...cost,id:newContractId,condominium_id:condo.id,periodic_service_id:savedService.id,interval_months:Number(costInterval||1),starts_on:costStart,next_due_on:costStart},{onConflict:'id'}).select('id').single();
+      if(priceResult.error)throw new Error('O serviço foi guardado, mas o custo não: '+priceResult.error.message+'. Pode tentar guardar novamente.');
+    }
     } catch(error){button.disabled=false;return toast(error.message||'Não foi possível guardar o serviço.',true);}
     modal.remove();
     toast(service?'Serviço atualizado.':'Serviço periódico criado.');
@@ -300,7 +324,7 @@ async function renderServices(condo) {
       ${services?.length ? `<div class="cf-service-grid">${services.map(s => `
         <article class="cf-service-card ${s.active ? '' : 'paused'}">
           <div class="cf-service-top"><span>${esc(s.service_type)}</span><b>${s.active ? 'Ativo' : 'Pausado'}</b></div>
-          <h3>${esc(s.title)}</h3><p>${(costs||[]).filter(c=>c.periodic_service_id===s.id&&c.active).map(c=>`${Number(c.amount).toLocaleString('pt-PT',{style:'currency',currency:'EUR'})} / ${c.interval_months} mês(es)`).join(' · ')||'Custo por definir no Financeiro'}</p>
+          <h3>${esc(s.title)}</h3><p>${(costs||[]).filter(c=>c.periodic_service_id===s.id&&c.active).map(c=>`${Number(c.amount).toLocaleString('pt-PT',{style:'currency',currency:'EUR'})} / ${c.interval_months} mês(es)`).join(' · ')||'Valor por definir — edite o serviço'}</p>
           <p>${esc(s.area || 'Zona não definida')}</p>
           <div class="cf-service-meta"><span><small>Frequência</small><strong>${esc(s.frequency)}</strong></span><span><small>Próxima</small><strong>${formatDate(s.next_service_on)}</strong></span><span><small>Fornecedor</small><strong>${esc(supplierMap.get(s.supplier_id) || '—')}</strong></span></div>
           <div class="cf-service-actions"><button class="ghost-btn compact" data-cf-edit-service="${s.id}">Editar</button><button class="ghost-btn compact" data-cf-history="${s.id}">Histórico</button><button class="ghost-btn compact" data-cf-toggle="${s.id}">${s.active ? 'Pausar' : 'Reativar'}</button>${s.active ? `<button class="primary-btn compact" data-cf-done="${s.id}">✓ Executado</button>` : ''}</div>

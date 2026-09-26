@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import {quotePlan,bestPlan} from '../assets/js/plans.js';
+assert.equal(quotePlan('condomia_10',1).limit,20);
+assert.equal(quotePlan('condomia_10',1).price,160);
+assert.equal(quotePlan('condomia_10',2).price,240);
+assert.equal(quotePlan('condomia_200',1).price,1280);
+for(const n of [-1,0.5,1001,NaN])assert.equal(quotePlan('condomia_10',n),null);
+assert.equal(quotePlan('condomia_1',1),null);
+assert.equal(bestPlan(20).price,160);
+assert.equal(bestPlan(50).id,'condomia_50');
+assert.equal(bestPlan(100).id,'condomia_100');
+assert.equal(bestPlan(200).id,'condomia_200');
+assert.equal(bestPlan(201).limit,210);
+console.log('PASS: additive capacity, prices, invalid counts and cheapest suitable plan.');

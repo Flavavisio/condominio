@@ -83,6 +83,7 @@ async function issueLicense(admin, afterSave) {
       p_billing_cycle: fd.get('cycle'),
       p_starts_on: fd.get('starts'),
       p_plan_id: fd.get('plan_id'),
+      p_extra_packs: Number(fd.get('extra_packs')||0),
       p_notes: fd.get('notes') || null
     });
     if (error) { button.disabled = false; button.textContent = 'Emitir licença'; return toast(error.message, true); }
@@ -94,7 +95,7 @@ async function issueLicense(admin, afterSave) {
 
 async function editLicense(license, afterSave) {
   const root = advancedOverlay(`<section class="cf-license-modal"><header><div><span>EDITAR LICENÇA</span><h2>${esc(license.company_name || 'Licença')}</h2><p>${esc(license.full_name || license.email || '')}</p></div><button data-lm-close>✕</button></header><form data-lm-form>
-    ${planFields(license.plan_id)}
+    ${planFields(license.plan_id,license.extra_packs)}
     <label>Ciclo<select name="cycle"><option value="monthly" ${license.billing_cycle === 'monthly' ? 'selected' : ''}>Mensal</option><option value="annual" ${license.billing_cycle === 'annual' ? 'selected' : ''}>Anual</option></select></label>
     <label>Início<input name="starts" type="date" value="${esc(license.starts_on || '')}" required></label>
     <label>Fim<input name="expires" type="date" value="${esc(license.expires_on || '')}" required></label>
@@ -111,6 +112,7 @@ async function editLicense(license, afterSave) {
       p_starts_on: fd.get('starts'),
       p_expires_on: fd.get('expires'),
       p_plan_id: fd.get('plan_id'),
+      p_extra_packs: Number(fd.get('extra_packs')||0),
       p_notes: fd.get('notes') || null
     });
     if (error) return toast(error.message, true);

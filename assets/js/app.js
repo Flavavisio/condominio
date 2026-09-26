@@ -1,5 +1,5 @@
 import * as api from './api.js';
-import {PLANS,euros} from './plans.js';
+import {euros,quotePlan} from './plans.js';
 import * as ui from './mockup-ui.js';
 import * as governance from './governance.js';
 import * as residents from './residents.js';
@@ -8,7 +8,7 @@ import * as reports from './reports.js';
 
 const app = document.querySelector('#app');
 let initialRoute=new URLSearchParams(window.location.search);
-const selectedPublicPlan=PLANS.find(p=>p.id===initialRoute.get('plan'));
+const selectedPublicPlan=quotePlan(initialRoute.get('plan'),Number(initialRoute.get('extra_packs')||0));
 
 const state = {
   session: null,
@@ -199,7 +199,7 @@ function authView() {
           <span class="eyebrow blue">${signup ? 'CRIAR CONTA' : 'ACESSO À PLATAFORMA'}</span>
           <h2>${signup ? 'Primeiro acesso' : 'Bem-vindo'}</h2>
           <p>${signup ? 'Crie a sua conta. O acesso a empresas e condomínios é atribuído pela administração.' : 'Entre com a sua conta da plataforma.'}</p>
-          ${selectedPublicPlan?`<p class="flash success">${esc(selectedPublicPlan.name)} · até ${selectedPublicPlan.limit} condomínios · ${euros(selectedPublicPlan.price)}/mês, IVA incluído. A ativação é feita pela equipa Condomia.</p>`:''}
+          ${selectedPublicPlan?`<p class="flash success">${esc(selectedPublicPlan.name)}${selectedPublicPlan.extraPacks?` + ${selectedPublicPlan.extraPacks} pack(s) de 10`:''} · até ${selectedPublicPlan.limit} condomínios · ${euros(selectedPublicPlan.price)}/mês, IVA incluído. A ativação é feita pela equipa Condomia.</p>`:''}
           ${flash()}
           <form id="authForm" class="form-stack">
             ${signup ? '<label>Nome completo<input type="text" name="fullName" autocomplete="name" required placeholder="Nome completo"></label>' : ''}
@@ -737,7 +737,7 @@ function bind() {
     submit.disabled = true;
     try {
       if (state.authMode === 'signup') {
-        const result = await api.signUp({ email: values.email, password: values.password, fullName: values.fullName, requestedPlan: selectedPublicPlan?.id });
+        const result = await api.signUp({ email: values.email, password: values.password, fullName: values.fullName, requestedPlan: selectedPublicPlan?.id, requestedExtraPacks:selectedPublicPlan?.extraPacks||0 });
         if (!result.session) {
           state.info = 'Conta criada. Confirme o email se a confirmação estiver ativa e depois faça login.';
           state.authMode = 'login';

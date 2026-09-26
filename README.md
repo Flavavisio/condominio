@@ -186,3 +186,11 @@ O ciclo anual corresponde a 12 mensalidades, sem desconto adicional. Selecionar 
 A capacidade é única e partilhada por toda a empresa gestora: não é somada por funcionário ou licença de administrador. A última atribuição de plano determina o limite atual da empresa; licenças anteriores conservam o respetivo histórico. A criação de condomínios acima do limite e reduções para uma capacidade inferior à utilização atual são bloqueadas pela base de dados. Empresas anteriores sem plano definido mantêm o acesso existente até atribuição explícita de plano.
 
 Migração: `20260925154128_condominium_license_plans.sql`. O teste `supabase/tests/license-plans.sql` verifica emissão, preços, limites, alterações, permissões e renovação numa transação com rollback. Verificação de sintaxe: `npm run check`.
+
+### Pack adicional de +10 condomínios
+
+Cada pack custa **80 €/mês, IVA incluído** (8 € por condomínio adicional), somado ao plano base. Disponível nos planos de 10, 50, 100 e 200; o plano individual não admite extras. Exemplo: Condomia 10 + 1 pack = 20 condomínios por 160 €/mês; +2 packs = 30 por 240 €/mês. O ciclo anual corresponde a 12 vezes o total mensal.
+
+O configurador público permite escolher a combinação; o simulador recomenda a opção mais económica com capacidade suficiente, incluindo planos maiores. Selecionar não ativa capacidade nem cobra valores: o Super Admin emite/edita a licença com a quantidade de packs. A quantidade é preservada na edição e renovação. Os metadados de registo `requested_extra_packs` são apenas interesse comercial. A base de dados calcula o preço e capacidade, bloqueia quantidades inválidas, alterações sem autorização e redução abaixo do número de condomínios existentes. Limite técnico: 1000 packs por empresa.
+
+Migração: `20260926001643_condominium_extra_packs.sql`. Testes: `node tests/extra-packs.test.mjs` e `supabase/tests/extra-packs.sql` (transação com rollback).

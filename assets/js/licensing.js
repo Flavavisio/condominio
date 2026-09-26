@@ -77,7 +77,7 @@ async function injectAdminLicenseBanner() {
   if (document.querySelector('.mockup-shell') && !document.querySelector('.cf-settings-license')) return;
   if (document.querySelector('.cf-license-banner')) return;
   if (!currentUser || access?.is_super_admin || !currentAdminCompany) return;
-  const { data } = await supabase.from('company_admin_licenses').select('id,billing_cycle,starts_on,expires_on,status,license_key,plan_id,condominium_limit,monthly_price').eq('company_id', currentAdminCompany).eq('user_id', currentUser.id).order('created_at',{ascending:false}).limit(1);
+  const { data } = await supabase.from('company_admin_licenses').select('id,billing_cycle,starts_on,expires_on,status,license_key,plan_id,extra_packs,condominium_limit,monthly_price').eq('company_id', currentAdminCompany).eq('user_id', currentUser.id).order('created_at',{ascending:false}).limit(1);
   const license = data?.[0] || null;
   const state = effectiveState(license);
   const main = document.querySelector('.main');
@@ -165,7 +165,7 @@ function openIssue(admin) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const button = e.currentTarget.querySelector('button[type="submit"]'); button.disabled=true; button.textContent='A emitir…';
-    const { error } = await supabase.rpc('issue_planned_company_license',{p_company_id:admin.company_id,p_user_id:admin.user_id,p_billing_cycle:fd.get('cycle'),p_starts_on:fd.get('starts'),p_plan_id:fd.get('plan_id'),p_notes:fd.get('notes') || null});
+    const { error } = await supabase.rpc('issue_planned_company_license',{p_company_id:admin.company_id,p_user_id:admin.user_id,p_billing_cycle:fd.get('cycle'),p_starts_on:fd.get('starts'),p_plan_id:fd.get('plan_id'),p_extra_packs:Number(fd.get('extra_packs')||0),p_notes:fd.get('notes') || null});
     if (error) { button.disabled=false; button.textContent='Emitir licença'; return toast(error.message,true); }
     root.remove(); document.querySelector('.cf-license-overlay')?.remove(); toast('Licença emitida com sucesso.'); await openLicenses();
   });

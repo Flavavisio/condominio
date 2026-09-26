@@ -119,3 +119,7 @@
 @media(max-width:700px){.cp-panel{padding:16px}.cp-panel select{width:100%}.cf-resident-shortcuts{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .cp-panel select { padding: 11px 14px; border: 1px solid #d9e4ed; border-radius: 10px; background: #fff; color: #173d5e; font: inherit; }
 @media(max-width:760px){.cf-resident-shell .cf-topbar-title{display:flex}.cf-resident-shell .cf-topbar-title h1{display:none}.cf-resident-shell .cf-mobile-brand{flex:1}.cf-resident-shell .cf-account{display:flex;padding:0}.cf-resident-shell .cf-account>span:not(.avatar),.cf-resident-shell .cf-account>.cf-icon{display:none}.cf-resident-shell .cf-account .avatar{width:30px;height:30px;font-size:11px}.cf-resident-shell .cf-header-right{gap:8px}.cp-panel table,.cp-panel tbody,.cp-panel tr,.cp-panel td{display:block;width:100%;min-width:0}.cp-panel thead{display:none}.cp-panel tr{padding:10px 0;border-bottom:1px solid #e4edf5}.cp-panel td{padding:7px 12px;border:0;box-sizing:border-box}.cp-panel td::before{content:attr(data-label);display:block;color:#687a8c;font-size:10px;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}.cp-panel .table-wrap{overflow:visible}.cp-panel td button{width:100%}}
+
+.cf-condo-cover{object-fit:cover;display:block;width:100%}
+.cf-cover-thumb{width:76px!important;height:60px!important;min-width:76px;border-radius:10px;object-fit:cover;margin:0!important}
+.cf-cover-preview{display:block;width:100%;max-width:380px;height:190px;object-fit:cover;border-radius:12px}

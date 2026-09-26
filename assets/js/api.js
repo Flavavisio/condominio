@@ -221,3 +221,26 @@ export async function setResidentAdmin(condominiumId,userId,enabled) {
 export async function reviewIssue(id,approve,note) {
  return throwIfError(await supabase.rpc('review_condominium_issue',{p_issue_id:id,p_approve:approve,p_note:note}));
 }
+
+const COVER_BUCKET='condominium-photos';
+export const updateCondominium=(id,values)=>update('condominiums',id,values);
+export function validateCondominiumCover(file) {
+  if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('Selecione uma fotografia JPG, PNG ou WebP.');
+  if(file.size>5*1024*1024)throw new Error('A fotografia deve ter no máximo 5 MB.');
+}
+export async function loadCondominiumCovers(condos) {
+  await Promise.all(condos.map(async c=>{
+    c.coverUrl=null;
+    if(!c.settings?.cover_path)return;
+    const {data,error}=await supabase.storage.from(COVER_BUCKET).createSignedUrl(c.settings.cover_path,3600);
+    if(!error)c.coverUrl=data?.signedUrl;
+  }));
+}
+export async function saveCondominiumCover(id,file,settings) {
+  let path=null;
+  if(file){validateCondominiumCover(file);path=`${id}/${crypto.randomUUID()}.${{'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[file.type]}`;
+    throwIfError(await supabase.storage.from(COVER_BUCKET).upload(path,file,{upsert:false,contentType:file.type}));}
+  try {await updateCondominium(id,{settings:{...settings,cover_path:path}});}
+  catch(error){if(path)await supabase.storage.from(COVER_BUCKET).remove([path]);throw error;}
+  if(settings.cover_path)await supabase.storage.from(COVER_BUCKET).remove([settings.cover_path]);
+}

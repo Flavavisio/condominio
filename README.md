@@ -212,3 +212,8 @@ Custos recorrentes podem associar-se aos serviços operacionais existentes, com 
 Os custos ficam em tabelas financeiras próprias, acessíveis apenas ao administrador da gestora ou gestor atribuído, incluindo proteção contra associações a fornecedores/serviços/contratos de outro condomínio. Administradores residentes continuam sem acesso a estes dados. Os relatórios incluem despesas, contratos e balanço; a demonstração inclui limpeza mensal e eletricidade de exemplo.
 
 Migração: `20260926154656_condominium_expenses_balance.sql`. Validação: `supabase/tests/expenses.sql` (rollback), `node tests/expenses.test.mjs`, `node tests/reports.test.mjs`, testes de interface em computador e telemóvel.
+
+### Fotografias e edição dos condomínios
+A gestora pode abrir um condomínio e usar **Editar condomínio** para alterar os dados e adicionar, substituir ou remover a fotografia de capa. Também é possível escolher a fotografia na criação. JPG, PNG e WebP até 5 MB; a capa aparece no dashboard, carteira e cabeçalho. O bucket privado `condominium-photos` usa acesso por condomínio e ligações temporárias. Os condóminos podem ver a fotografia, mas não editar nem carregar imagens. A criação e edição mantêm as permissões RLS existentes.
+O menu Equipa é renderizado com os restantes menus para administradores da gestora, sem a reinserção periódica que causava o desaparecimento ao navegar.
+Validação de permissões: `supabase/tests/condominium-photos.sql` (transação com rollback).

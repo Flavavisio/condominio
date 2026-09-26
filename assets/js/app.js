@@ -128,6 +128,7 @@ async function loadContext({ keepView = true } = {}) {
 
     const workspace = await api.loadWorkspace(state.user.id);
     Object.assign(state, workspace);
+    await api.loadCondominiumCovers(state.condominiums);
 
     if (state.selectedCondoId && !state.condominiums.some(item => item.id === state.selectedCondoId)) {
       state.selectedCondoId = null;
@@ -327,7 +328,7 @@ function condoRows(items, compact = false) {
     const company = companyFor(item);
     const issueCount = state.issues.filter(issue => issue.condominium_id === item.id && !['resolved', 'closed'].includes(issue.status)).length;
     return `<button class="data-row row-button" data-condo="${item.id}">
-      <div class="logo-dot condo">▥</div>
+      ${ui.condoPicture(item,0,'cf-cover-thumb')}
       <div><strong>${esc(item.name)}</strong><small>${esc(item.address || item.city || 'Sem morada')} · ${Number(item.fractions_count || state.fractions.filter(f => f.condominium_id === item.id).length)} frações</small></div>
       <div class="right">${!compact ? `<strong>${esc(company?.label || company?.name || '—')}</strong>` : ''}${issueCount ? `<span class="mini-count">${issueCount} abertas</span>` : statusPill(item.status, 'Operacional')}<span>→</span></div>
     </button>`;
@@ -394,9 +395,9 @@ function condoView() {
   const canWork = canWorkCompany(condo.company_id) || isSuperAdmin();
   return shell(`
     <section class="condo-hero" data-condominium-id="${esc(condo.id)}" data-initial-finance="${state.condoTab==='finance'}" style="--condo-brand:${esc(company?.brand_color || '#3768f5')}">
-      <div class="condo-brand-mark">${esc(initials(company?.label || company?.name || condo.name))}</div>
+      ${ui.condoPicture(condo,0,'cf-cover-thumb')}
       <div><span class="eyebrow">${esc(company?.label || company?.name || 'Gestora')}</span><h2>${esc(condo.name)}</h2><p>${esc([condo.address, condo.postal_code, condo.city].filter(Boolean).join(' · ') || 'Morada por preencher')}</p></div>
-      <div class="condo-hero-side">${statusPill(condo.status, condo.status === 'active' ? 'Ativo' : condo.status)}<small>${state.fractions.filter(item => item.condominium_id === condo.id).length || condo.fractions_count || 0} frações</small></div>
+      <div class="condo-hero-side">${canWork ? '<button class="ghost-btn" data-open="edit-condominium">Editar condomínio</button>' : ''}${statusPill(condo.status, condo.status === 'active' ? 'Ativo' : condo.status)}<small>${state.fractions.filter(item => item.condominium_id === condo.id).length || condo.fractions_count || 0} frações</small></div>
     </section>
     <nav class="module-tabs">
       ${condoTab('overview', 'Resumo')}
@@ -517,6 +518,7 @@ function openModal(type) {
   const condo = selectedCondo();
   if (type === 'company') host.innerHTML = modalCompany();
   if (type === 'condominium') host.innerHTML = modalCondominium();
+  if (type === 'edit-condominium' && condo) host.innerHTML = modalCondominium(condo);
   if (type === 'fraction' && condo) host.innerHTML = modalFraction(condo);
   if (type === 'issue' && condo) host.innerHTML = modalIssue(condo);
   if (type === 'notice' && condo) host.innerHTML = modalNotice(condo);
@@ -536,9 +538,10 @@ function modalCompany() {
   return modalShell('Nova empresa gestora', 'SUPER ADMIN', `<form id="entityForm" class="form-grid"><label>Nome legal<input name="name" required></label><label>Label / marca<input name="label" required></label><label>NIF<input name="nif"></label><label>Email<input name="email" type="email"></label><label>Telefone<input name="phone"></label><p class="wide">O plano e o limite de condomínios são definidos ao emitir a licença.</p><label>Cor da marca<input name="brand_color" type="color" value="#3768f5"></label>${modalActions('Criar empresa')}</form>`);
 }
 
-function modalCondominium() {
+function modalCondominium(condo=null) {
   const companies = state.companies.filter(item => canManageCompany(item.id));
-  return modalShell('Novo condomínio', 'CARTEIRA', `<form id="entityForm" class="form-grid"><label>Empresa gestora<select name="company_id" required>${companies.map(item => `<option value="${item.id}">${esc(item.label || item.name)}</option>`).join('')}</select></label><label>Nome<input name="name" required></label><label class="wide">Morada<input name="address"></label><label>Código postal<input name="postal_code"></label><label>Cidade<input name="city"></label><label>N.º frações<input name="fractions_count" type="number" min="0" value="0"></label><label>Ref. contrato<input name="contract_ref"></label><label>Valor mensal (€)<input name="monthly_value" type="number" min="0" step="0.01" value="0"></label>${modalActions('Criar condomínio')}</form>`);
+  const field=(name,label,type='text')=>`<label>${label}<input name="${name}" type="${type}" value="${esc(condo?.[name] ?? (type==='number'?0:''))}" ${name==='name'?'required maxlength="160"':''} ${type==='number'?'min="0" step="'+(name==='fractions_count'?'1':'0.01')+'"':''}></label>`;
+  return modalShell(condo?'Editar condomínio':'Novo condomínio','CARTEIRA',`<form id="entityForm" class="form-grid" data-edit-id="${esc(condo?.id||'')}">${condo?'':`<label>Empresa gestora<select name="company_id" required>${companies.map(item=>`<option value="${esc(item.id)}">${esc(item.label||item.name)}</option>`).join('')}</select></label>`}${field('name','Nome')}${field('address','Morada')}${field('postal_code','Código postal')}${field('city','Cidade')}${field('fractions_count','N.º frações','number')}${field('contract_ref','Ref. contrato')}${field('monthly_value','Valor mensal (€)','number')}<label class="wide">Fotografia de capa<input name="cover" type="file" accept="image/jpeg,image/png,image/webp"><small>JPG, PNG ou WebP, até 5 MB. Aparece no dashboard e na carteira.</small></label><div class="wide" id="coverPreview">${condo?.coverUrl?ui.condoPicture(condo,0,'cf-cover-preview'):''}</div>${condo?.settings?.cover_path?'<label class="wide check-label"><input type="checkbox" name="remove_cover"> Remover fotografia atual</label>':''}${modalActions(condo?'Guardar alterações':'Criar condomínio')}</form>`);
 }
 
 function modalFraction(condo) {
@@ -579,6 +582,11 @@ function modalActions(label) {
 
 function bindModal(type) {
   document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', closeModal));
+  document.querySelector('[name=cover]')?.addEventListener('change', async event=>{
+    const host=document.querySelector('#coverPreview'); host.replaceChildren();
+    const file=event.target.files[0]; if(!file)return;
+    try { api.validateCondominiumCover(file); const img=document.createElement('img'); img.className='cf-cover-preview'; img.alt='Pré-visualização da fotografia'; img.src=URL.createObjectURL(file); img.onload=()=>URL.revokeObjectURL(img.src); host.append(img); } catch(error) { event.target.value=''; host.textContent=error.message; }
+  });
   document.querySelector('#entityForm')?.addEventListener('submit', event => submitEntity(event, type));
 }
 
@@ -594,10 +602,17 @@ async function submitEntity(event, type) {
       values.monthly_fee = 0; values.plan = 'Sem plano';
       await api.createCompany(values);
     }
-    if (type === 'condominium') {
+    if (['condominium','edit-condominium'].includes(type)) {
+      const file=values.cover; const remove=values.remove_cover==='on'; delete values.cover; delete values.remove_cover;
+      values.name=values.name.trim(); if(!values.name)throw new Error('Preencha o nome do condomínio.');
+      if(file?.size)api.validateCondominiumCover(file);
       values.fractions_count = Number(values.fractions_count || 0);
       values.monthly_value = Number(values.monthly_value || 0);
-      await api.createCondominium(values);
+      let id=form.dataset.editId;
+      if(id) await api.updateCondominium(id,values);
+      else { const created=await api.createCondominium(values); id=created.id; form.dataset.editId=id; }
+      const old=state.condominiums.find(c=>c.id===id);
+      if(file?.size || remove) await api.saveCondominiumCover(id,file?.size?file:null,old?.settings||{});
     }
     if (type === 'fraction') {
       if (values.permillage) values.permillage = Number(values.permillage);
@@ -758,6 +773,7 @@ function bind() {
 
   document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', event => {
     event.preventDefault();
+    if (button.dataset.view==='team') { window.CondominioCompanyTeam?.open(); return; }
     state.view = button.dataset.view;
     state.error = ''; state.info = ''; render();
   }));

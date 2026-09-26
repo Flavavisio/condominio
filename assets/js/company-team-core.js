@@ -68,29 +68,6 @@ async function resolveContext() {
   }
 }
 
-function ensureTeamNav() {
-  const nav = document.querySelector('.sidebar nav');
-  if (!nav) return;
-  if (!company || !membership) {
-    nav.querySelector('.cf-team-core-nav')?.remove();
-    return;
-  }
-  if (nav.querySelector('.cf-team-core-nav')) return;
-  nav.querySelector('.cf-team-nav')?.remove();
-
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'nav-item cf-team-core-nav';
-  btn.innerHTML = '<svg class="cf-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m18 0v-2a4 4 0 0 0-3-4M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8m8-7a4 4 0 0 1 0 7"/></svg><span>Equipa</span>';
-  btn.addEventListener('click', openTeam);
-
-  const dashboard = [...nav.querySelectorAll('.nav-item')].find(x => x.textContent.trim().includes('Dashboard'));
-  const condos = [...nav.querySelectorAll('.nav-item')].find(x => x.textContent.trim().includes('Condomínios'));
-  if (condos) nav.insertBefore(btn, condos);
-  else if (dashboard?.nextSibling) nav.insertBefore(btn, dashboard.nextSibling);
-  else nav.append(btn);
-}
-
 function ensureDashboardShortcut() {
   if (!company || !membership) return;
   const title = document.querySelector('.topbar h1')?.textContent?.trim();
@@ -116,7 +93,6 @@ function ensureDashboardShortcut() {
 }
 
 function syncUI() {
-  ensureTeamNav();
   ensureDashboardShortcut();
 }
 

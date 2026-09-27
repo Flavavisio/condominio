@@ -2,32 +2,34 @@
 
 Remetente e resposta: **Condomia <geral.condomia@gmail.com>**.
 
-## Estado
+## Edge Function de avisos
 
-O endereço está definido como contacto público. O envio pelo Gmail ainda depende da autenticação SMTP no servidor. Não guardar a palavra-passe no repositório, no JavaScript público ou em conversas.
+`email-dispatch` usa o segredo `GMAIL_APP_PASSWORD` exclusivamente no servidor, SMTP Gmail com TLS na porta 465 e Nodemailer 10.0.11. A função exige `x-cron-secret`, validado contra a configuração privada `email_dispatch_config`; não aceita destinatários nem conteúdo fornecidos pelo cliente. Nunca guardar a palavra-passe no código.
 
-## Autenticação Supabase
+O cron `condomia-email-dispatch` processa a fila a cada dois minutos, até cinco avisos por chamada, com um limite conservador de 400 mensagens reclamadas nas últimas 24 horas. Os destinatários vêm dos utilizadores associados às notificações; o acesso é verificado novamente antes do envio. Cada email tem um único destinatário.
 
-Configurar Custom SMTP em Authentication → Email → SMTP Settings:
+Inclui novos avisos de licenças, ocorrências aprovadas, manutenção e serviços já gerados pela aplicação; acrescenta avisos aos moradores para assembleias agendadas, votações publicadas e avisos publicados imediatamente, bem como o resultado da validação do próprio comprovativo. Não importa avisos antigos nem envia palavras-passe.
+
+A fila `notification_emails` regista `pending`, `sending`, `retry`, `sent`, `skipped` ou `review`. `sent` significa aceite pelo servidor SMTP, não confirmação de leitura nem garantia de chegada à caixa de entrada. Falhas seguras de conexão têm tentativas limitadas. Envios com resultado incerto ficam em `review` para evitar repetição automática. A configuração e fila têm RLS e estão inacessíveis a clientes; apenas service_role e tarefas internas as utilizam.
+
+Para pausar: `update public.email_dispatch_config set enabled=false where id=1;` (operação administrativa no servidor).
+
+Os modos autenticados `verify` (apenas autenticação SMTP) e `test` (email fixo para a própria conta oficial) permitem verificar a ligação sem indicar destinatários externos. A autenticação e a aceitação SMTP do teste foram verificadas em 27/09/2026.
+
+Teste transacional: `supabase/tests/email-delivery.sql`.
+
+## Emails de autenticação: configuração separada
+
+A Edge Function não substitui o SMTP de Supabase Auth. Confirmação de conta, convite de autenticação e recuperação de palavra-passe exigem Custom SMTP em Authentication → Email → SMTP Settings:
 
 | Campo | Valor |
 | --- | --- |
-| Sender email | geral.condomia@gmail.com |
+| Sender email / Username | geral.condomia@gmail.com |
 | Sender name | Condomia |
 | Host | smtp.gmail.com |
-| Port | 465 (TLS) |
-| Username | geral.condomia@gmail.com |
-| Password | Palavra-passe de aplicação criada na conta Google |
+| Port | 465 |
+| Password | Palavra-passe de aplicação, colocada diretamente no dashboard |
 
-A conta Google precisa de verificação em dois passos para criar uma palavra-passe de aplicação. Se a opção não estiver disponível, resolver as restrições da conta ou usar uma integração OAuth; não usar a palavra-passe normal da conta.
+https://supabase.com/dashboard/project/pvfrlirjdauncoudkomu/auth/smtp
 
-Configuração do projeto: https://supabase.com/dashboard/project/pvfrlirjdauncoudkomu/auth/smtp
-Palavras-passe de aplicação: https://myaccount.google.com/apppasswords
-
-## Limites do que esta configuração ativa
-
-O SMTP do Supabase Auth serve os emails de autenticação, como confirmação, convite por email e recuperação de acesso. O fluxo atual de criação direta de utilizadores não envia email nem palavras-passe.
-
-Os avisos operacionais (licenças, ocorrências, assembleias e pagamentos) ainda não têm transporte por email. Atualmente usam as notificações da aplicação e o serviço de push existente. Necessitam de um serviço de envio no servidor com controlo de destinatários, deduplicação e registo de falhas; configurar o SMTP de Auth não ativa esses avisos.
-
-Após configurar a credencial, validar o remetente, a resposta e os links com um envio de teste autorizado antes de ativar emails automáticos.
+A criação direta de utilizadores continua sem enviar palavras-passe por email.

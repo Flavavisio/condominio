@@ -1,4 +1,4 @@
-const CACHE = 'condomia-v23-license-cycles';
+const CACHE = 'condomia-v24-auth-email';
 const CORE = ['./','./index.html','./app.html','./demo.html','./manifest.webmanifest','./assets/icons/cf-icon.svg'];
 
 self.addEventListener('install', event => {

@@ -18,22 +18,25 @@ Os modos autenticados `verify` (apenas autenticação SMTP) e `test` (email fixo
 
 Teste transacional: `supabase/tests/email-delivery.sql`.
 
-## Emails de autenticação: configuração separada
+## Emails de autenticação: hook preparado, ativação no dashboard pendente
 
-A Edge Function não substitui o SMTP de Supabase Auth. Confirmação de conta, convite de autenticação e recuperação de palavra-passe exigem Custom SMTP em Authentication → Email → SMTP Settings:
+A Edge Function `auth-email` está publicada. Usa o mesmo Gmail e layout, verifica assinaturas Standard Webhooks e suporta confirmação, recuperação, convite, acesso por link, alteração de email (incluindo confirmação dupla) e código de reautenticação. Nunca envia palavras-passe. O endpoint recusa pedidos sem assinatura válida.
 
-| Campo | Valor |
-| --- | --- |
-| Sender email / Username | geral.condomia@gmail.com |
-| Sender name | Condomia |
-| Host | smtp.gmail.com |
-| Port | 465 |
-| Password | Palavra-passe de aplicação, colocada diretamente no dashboard |
+Ativar em https://supabase.com/dashboard/project/pvfrlirjdauncoudkomu/auth/hooks :
 
-https://supabase.com/dashboard/project/pvfrlirjdauncoudkomu/auth/smtp
+1. Criar hook **Send Email**, tipo HTTPS.
+2. URL: `https://pvfrlirjdauncoudkomu.supabase.co/functions/v1/auth-email`.
+3. Gerar o segredo de assinatura e copiá-lo integralmente para o Secret `SEND_EMAIL_HOOK_SECRET` em Edge Functions → Secrets. Não partilhar no chat nem no repositório.
+4. Guardar/ativar o hook. O fornecedor Email deve estar ativo; ativar Confirm Email caso se pretenda confirmação no registo.
 
-A criação direta de utilizadores continua sem enviar palavras-passe por email.
+O hook substitui o SMTP de Auth; não é necessário duplicar a palavra-passe Gmail nas definições SMTP. O SMTP alternativo permanece válido se o hook não for usado.
+
+A página `auth.html` permite pedir recuperação e confirmar links apenas após clicar, para evitar consumo automático por scanners. Links de recuperação/convite permitem definir uma palavra-passe; a aplicação tem o link “Esqueci-me da palavra-passe”. A função invite-member usa convite Auth quando não é fornecida uma palavra-passe; a criação direta com palavra-passe continua a manter o comportamento existente.
+
+Adicionar `https://flavavisio.github.io/condominio/auth.html*` aos Redirect URLs e usar `https://flavavisio.github.io/condominio/app.html` como Site URL. Os links do hook apontam diretamente para a página de confirmação do projeto.
+
+Validação local concluída para o fluxo de confirmação e recuperação com Auth simulado. O teste integrado de envio Auth depende da ativação do hook e do segredo de assinatura no dashboard.
 
 ## Layout comum
 
-`supabase/functions/email-dispatch/layout.js` centraliza o HTML, alternativa de texto e logótipo PNG incorporado por CID. O PNG em `logo.js` é renderizado do logótipo oficial `assets/icons/cf-icon.svg`. Todos os avisos e o teste usam esta função. Cabeçalho azul-marinho com marca e slogan, mensagem, botão e contacto oficial no rodapé. Os campos variáveis são escapados como texto. Os emails de Auth permanecem por configurar separadamente.
+`supabase/functions/email-dispatch/layout.js` centraliza o HTML, alternativa de texto e logótipo PNG incorporado por CID. O PNG em `logo.js` é renderizado do logótipo oficial `assets/icons/cf-icon.svg`. Todos os avisos e o teste usam esta função. Cabeçalho azul-marinho com marca e slogan, mensagem, botão e contacto oficial no rodapé. Os campos variáveis são escapados como texto. O layout também é usado pelo hook de Auth preparado.

@@ -129,13 +129,11 @@ Deno.serve(async (req: Request) => {
   }
 
   if (!targetUser) {
-    if (password.length < 8) return json({ error: "Defina uma password inicial com pelo menos 8 caracteres." }, 400);
-    const { data: createData, error: createError } = await admin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: fullName ? { full_name: fullName } : undefined
-    });
+    if (password && password.length < 8) return json({ error: "Defina uma password inicial com pelo menos 8 caracteres." }, 400);
+    const creation = password
+      ? await admin.auth.admin.createUser({email,password,email_confirm:true,user_metadata:fullName?{full_name:fullName}:undefined})
+      : await admin.auth.admin.inviteUserByEmail(email,{data:fullName?{full_name:fullName}:undefined,redirectTo:'https://flavavisio.github.io/condominio/auth.html'});
+    const {data:createData,error:createError}=creation;
     if (createError || !createData?.user) {
       return json({ error: createError?.message || "Não foi possível criar o utilizador." }, 400);
     }

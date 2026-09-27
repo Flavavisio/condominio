@@ -210,6 +210,7 @@ function authView() {
             <label>Palavra-passe<input type="password" name="password" autocomplete="${signup ? 'new-password' : 'current-password'}" minlength="8" required placeholder="••••••••"></label>
             <button class="primary-btn" type="submit">${signup ? 'Criar conta' : 'Entrar'}</button>
           </form>
+          <p><a href="auth.html?mode=recovery">Esqueci-me da palavra-passe</a></p>
           <button class="auth-switch" id="authSwitch">${signup ? 'Já tenho conta → Entrar' : 'Primeiro acesso → Criar conta'}</button>
           <small class="auth-note"><a href="index.html">← Voltar à apresentação da Condomia</a></small>
         </div>

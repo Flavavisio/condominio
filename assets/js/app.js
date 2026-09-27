@@ -1,3 +1,4 @@
+import {openCompanySetup} from './company-setup.js';
 import {mountDashboardAlerts} from './financial-operations.js';
 import * as api from './api.js';
 import {euros,quotePlan} from './plans.js';
@@ -517,7 +518,7 @@ function openModal(type) {
   const host = document.querySelector('#modalHost');
   if (!host) return;
   const condo = selectedCondo();
-  if (type === 'company') host.innerHTML = modalCompany();
+  if (type === 'company') {openCompanySetup(async message=>{await loadContext();showInfo(message);});return;}
   if (type === 'condominium') host.innerHTML = modalCondominium();
   if (type === 'edit-condominium' && condo) host.innerHTML = modalCondominium(condo);
   if (type === 'fraction' && condo) host.innerHTML = modalFraction(condo);

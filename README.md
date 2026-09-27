@@ -235,3 +235,7 @@ Em **Empresas gestoras → Nova empresa**, o Super Admin preenche dados legais/c
 ### Gestão de empresas e planos
 
 A criação e edição de empresas e licenças carregam os planos ativos de `license_plans`. A mensalidade é calculada pelo plano e pelos packs adicionais de +10 (80 €/mês). A alteração do plano da empresa sincroniza as licenças ativas, preservando validade e estado. Apenas o módulo principal acrescenta a ação Gerir; Gerir licenças fecha a gestão da empresa antes de abrir a respetiva página.
+
+### Periodicidade e validade automáticas
+
+Plano e packs usam a mesma periodicidade mensal ou anual (12 × mensalidade, IVA incluído). A emissão define início no dia atual e calcula o fim. Alterar o período recalcula o fim a partir do início original; renovar acrescenta validade sem interromper o acesso; reativar uma licença expirada começa um novo período hoje. As datas do contrato são sincronizadas sem campos de edição manual. O cron de notificações avisa os administradores da empresa e o Super Admin aos 7, 3, 1 e 0 dias, e após expirar, com deduplicação por licença e validade. Os avisos aparecem na aplicação; push depende da subscrição existente. Teste transacional: `supabase/tests/automatic-license-cycles.sql`.

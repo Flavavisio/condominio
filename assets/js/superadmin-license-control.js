@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js';
-import {planFields,bindPlanFields,planSummary,enrichLicensePlans,loadPlanCatalog} from './plans.js';
+import {planFields,bindPlanFields,planSummary,enrichLicensePlans,loadPlanCatalog,cycleField} from './plans.js';
 
 let access = null;
 let currentUser = null;
@@ -91,8 +91,7 @@ async function issueLicense(admin, refresh) {
   try { await loadPlanCatalog(supabase); } catch(error) { alert(error.message); return; }
   const root = overlay(`<section class="cf-license-modal"><header><div><span>SUPER ADMIN · EMITIR</span><h2>${esc(admin.company_name)}</h2><p>${esc(admin.full_name)} · ${esc(admin.email)}</p></div><button data-sa-close>✕</button></header><form data-sa-form>
     ${planFields()}
-    <label>Ciclo<select name="cycle"><option value="monthly">Mensal</option><option value="annual">Anual</option></select></label>
-    <label>Início<input name="starts" type="date" value="${new Date().toISOString().slice(0,10)}" required></label>
+    ${cycleField()}<p class="wide">A validade começa hoje e termina automaticamente após um mês ou um ano. Os packs seguem a mesma periodicidade.</p>
     <label class="wide">Notas<textarea name="notes" rows="3"></textarea></label>
     <div class="actions wide"><button type="button" data-sa-close>Cancelar</button><button class="primary" type="submit">Emitir licença</button></div>
   </form></section>`);
@@ -102,11 +101,10 @@ async function issueLicense(admin, refresh) {
     const fd = new FormData(e.currentTarget);
     const btn = e.currentTarget.querySelector('button[type="submit"]');
     btn.disabled = true; btn.textContent = 'A emitir…';
-    const { error } = await supabase.rpc('issue_planned_company_license', {
+    const { error } = await supabase.rpc('issue_automatic_company_license', {
       p_company_id: admin.company_id,
       p_user_id: admin.user_id,
       p_billing_cycle: fd.get('cycle'),
-      p_starts_on: fd.get('starts'),
       p_plan_id: fd.get('plan_id'),
       p_extra_packs: Number(fd.get('extra_packs')||0),
       p_notes: fd.get('notes') || null
@@ -116,46 +114,34 @@ async function issueLicense(admin, refresh) {
   });
 }
 
-async function editLicense(license, refresh) {
+async function editLicense(license, refresh, action='edit') {
   try { await loadPlanCatalog(supabase); } catch(error) { alert(error.message); return; }
-  const root = overlay(`<section class="cf-license-modal"><header><div><span>SUPER ADMIN · EDITAR</span><h2>${esc(license.company_name || 'Licença')}</h2><p>${esc(license.full_name || license.email || '')}</p></div><button data-sa-close>✕</button></header><form data-sa-form>
+  const root = overlay(`<section class="cf-license-modal"><header><div><span>SUPER ADMIN · ${action==='reactivate'?'REATIVAR':action==='renew'?'RENOVAR':'ALTERAR PLANO'}</span><h2>${esc(license.company_name || 'Licença')}</h2><p>${esc(license.full_name || license.email || '')}</p></div><button data-sa-close>✕</button></header><form data-sa-form>
     ${planFields(license.plan_id,license.extra_packs)}
-    <label>Ciclo<select name="cycle"><option value="monthly" ${license.billing_cycle === 'monthly' ? 'selected' : ''}>Mensal</option><option value="annual" ${license.billing_cycle === 'annual' ? 'selected' : ''}>Anual</option></select></label>
-    <label>Início<input name="starts" type="date" value="${esc(license.starts_on || '')}" required></label>
-    <label>Fim<input name="expires" type="date" value="${esc(license.expires_on || '')}" required></label>
+    ${cycleField(license.billing_cycle)}
+    <p class="wide">${action==='renew'?'Acrescenta o período escolhido ao fim da validade atual, sem interromper o acesso. Se já venceu, começa hoje.':action==='reactivate'?'Se a licença já venceu, começa hoje com o período escolhido. Uma licença suspensa ainda válida mantém as datas, se mantiver a periodicidade.':'Ao mudar entre mensal e anual, o fim é recalculado a partir do início da licença. Se a nova validade já terminou, utilize Reativar.'}</p>
     <label class="wide">Notas<textarea name="notes" rows="3">${esc(license.notes || '')}</textarea></label>
-    <div class="actions wide"><button type="button" data-sa-close>Cancelar</button><button class="primary" type="submit">Guardar</button></div>
+    <div class="actions wide"><button type="button" data-sa-close>Cancelar</button><button class="primary" type="submit">${action==='reactivate'?'Reativar licença':action==='renew'?'Renovar licença':'Guardar'}</button></div>
   </form></section>`);
   bindPlanFields(root);
   root.querySelector('[data-sa-form]').addEventListener('submit', async e => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    const { error } = await supabase.rpc('update_planned_company_license', {
+    const button=e.currentTarget.querySelector('[type=submit]');button.disabled=true;
+    const { error } = await supabase.rpc('manage_automatic_company_license', {
+      p_action: action,
       p_license_id: license.id,
       p_billing_cycle: fd.get('cycle'),
-      p_starts_on: fd.get('starts'),
-      p_expires_on: fd.get('expires'),
       p_plan_id: fd.get('plan_id'),
       p_extra_packs: Number(fd.get('extra_packs')||0),
       p_notes: fd.get('notes') || null
     });
-    if (error) return toast(error.message, true);
-    closeOverlay(); toast('Licença atualizada.'); await refresh();
+    if (error) {button.disabled=false;return toast(error.message, true);}
+    closeOverlay(); toast(action==='reactivate'?'Licença reativada.':action==='renew'?'Licença renovada.':'Licença atualizada.'); await refresh();
   });
 }
 
-async function renewLicense(license, refresh) {
-  const root = overlay(`<section class="cf-license-modal"><header><div><span>SUPER ADMIN · RENOVAR</span><h2>${esc(license.company_name || 'Licença')}</h2><p>Escolha o período a acrescentar.</p></div><button data-sa-close>✕</button></header><form data-sa-form>
-    <label class="wide">Renovação<select name="cycle"><option value="monthly">+ 1 mês</option><option value="annual">+ 1 ano</option></select></label>
-    <div class="actions wide"><button type="button" data-sa-close>Cancelar</button><button class="primary" type="submit">Renovar</button></div>
-  </form></section>`);
-  root.querySelector('[data-sa-form]').addEventListener('submit', async e => {
-    e.preventDefault(); const fd = new FormData(e.currentTarget);
-    const { error } = await supabase.rpc('renew_company_admin_license', { p_license_id: license.id, p_billing_cycle: fd.get('cycle') });
-    if (error) return toast(error.message, true);
-    closeOverlay(); toast('Licença renovada.'); await refresh();
-  });
-}
+async function renewLicense(license,refresh){return editLicense(license,refresh,'renew');}
 
 async function changeStatus(license, status, refresh) {
   const text = status === 'suspended' ? 'Suspender esta licença?' : status === 'active' ? 'Reativar esta licença?' : 'Cancelar esta licença?';
@@ -169,9 +155,9 @@ async function changeStatus(license, status, refresh) {
 function buttons(admin, license) {
   const state = stateOf(license);
   if (!license) return `<button data-sa-issue="${admin.company_id}|${admin.user_id}">Emitir</button>`;
-  const common = `<button data-sa-edit="${license.id}">Editar</button><button data-sa-renew="${license.id}">Renovar</button>`;
-  if (['cancelled','expired'].includes(state.key)) return `<button data-sa-issue="${admin.company_id}|${admin.user_id}">Emitir nova</button>${common}`;
-  return `${common}${license.status === 'active' ? `<button class="danger" data-sa-status="${license.id}|suspended">Suspender</button>` : ''}${license.status === 'suspended' ? `<button data-sa-status="${license.id}|active">Reativar</button>` : ''}<button class="danger" data-sa-status="${license.id}|cancelled">Cancelar</button>`;
+  const common = `<button data-sa-edit="${license.id}">Alterar plano / período</button><button data-sa-renew="${license.id}">Renovar</button>`;
+  if (['cancelled','expired'].includes(state.key)) return `<button data-sa-reactivate="${license.id}">Reativar</button><button data-sa-edit="${license.id}">Alterar plano / período</button>`;
+  return `${common}${license.status === 'active' ? `<button class="danger" data-sa-status="${license.id}|suspended">Suspender</button>` : ''}${license.status === 'suspended' ? `<button data-sa-reactivate="${license.id}">Reativar</button>` : ''}<button class="danger" data-sa-status="${license.id}|cancelled">Cancelar</button>`;
 }
 
 async function openLicenses(companyId = null) {
@@ -190,6 +176,7 @@ async function openLicenses(companyId = null) {
     root.querySelectorAll('[data-sa-issue]').forEach(btn => btn.addEventListener('click', () => { const [c,u] = btn.dataset.saIssue.split('|'); issueLicense(ctx.admins.find(a => a.company_id === c && a.user_id === u), refresh); }));
     root.querySelectorAll('[data-sa-edit]').forEach(btn => btn.addEventListener('click', () => editLicense(ctx.licenses.find(l => l.id === btn.dataset.saEdit), refresh)));
     root.querySelectorAll('[data-sa-renew]').forEach(btn => btn.addEventListener('click', () => renewLicense(ctx.licenses.find(l => l.id === btn.dataset.saRenew), refresh)));
+    root.querySelectorAll('[data-sa-reactivate]').forEach(btn => btn.addEventListener('click', () => editLicense(ctx.licenses.find(l => l.id === btn.dataset.saReactivate), refresh, 'reactivate')));
     root.querySelectorAll('[data-sa-status]').forEach(btn => btn.addEventListener('click', () => { const [id,status] = btn.dataset.saStatus.split('|'); changeStatus(ctx.licenses.find(l => l.id === id), status, refresh); }));
   } catch (error) {
     toast(error.message || 'Não foi possível abrir as licenças.', true);
@@ -229,7 +216,7 @@ async function ensureCompanyButton() {
   btn.className = 'admin-secondary';
   btn.dataset.saCompanyLicense = company.id;
   btn.textContent = 'Gerir licenças';
-  btn.addEventListener('click', () => openLicenses(company.id));
+  btn.addEventListener('click', () => {document.querySelector('#adminOverlay')?.remove();openLicenses(company.id);});
   head.appendChild(btn);
 }
 

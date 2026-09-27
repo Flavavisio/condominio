@@ -1,4 +1,4 @@
-import {planFields,bindPlanFields,loadPlanCatalog,quotePlan} from './plans.js';
+import {planFields,bindPlanFields,loadPlanCatalog,quotePlan,cycleField} from './plans.js';
 import { supabase } from './supabase.js';
 
 let currentUser = null;
@@ -287,11 +287,11 @@ async function openCompany(companyId) {
             <label>NIF<input name="nif" value="${esc(company.nif || '')}"></label>
             <label>Email<input name="email" type="email" value="${esc(company.email || '')}"></label>
             <label>Telefone<input name="phone" value="${esc(company.phone || '')}"></label>
-            ${planFields(company.license_plan_id,company.extra_packs||0)}
+            ${planFields(company.license_plan_id,company.extra_packs||0)}${cycleField(company.billing_cycle)}
             <label>Mensalidade (€)<input name="monthly_fee" readonly type="number" step="0.01" value="${Number(company.monthly_fee || 0)}"></label>
             <label>Estado<select name="status"><option value="active" ${company.status === 'active' ? 'selected' : ''}>Ativa</option><option value="suspended" ${company.status === 'suspended' ? 'selected' : ''}>Suspensa</option><option value="cancelled" ${company.status === 'cancelled' ? 'selected' : ''}>Cancelada</option></select></label>
-            <label>Início contrato<input name="contract_start" type="date" value="${esc(company.contract_start || '')}"></label>
-            <label>Fim contrato<input name="contract_end" type="date" value="${esc(company.contract_end || '')}"></label>
+            <p class="wide">Contrato: ${esc(company.contract_start || 'Por emitir')} → ${esc(company.contract_end || 'Calculado na emissão')}. As datas são calculadas pela licença.</p>
+
             <label class="wide">Notas<textarea name="notes" rows="3">${esc(company.notes || '')}</textarea></label>
             <div class="admin-form-actions wide"><button class="admin-primary" type="submit">Guardar alterações</button></div>
           </form>
@@ -330,7 +330,7 @@ async function openCompany(companyId) {
     </section>`);
 
   bindPlanFields(node);
-  const licenseButton=document.createElement('button');licenseButton.type='button';licenseButton.className='admin-secondary';licenseButton.textContent='Gerir licenças';licenseButton.onclick=()=>{closeOverlay();window.CondominioSuperAdminLicenses?.open(company.id);};
+  const licenseButton=document.createElement('button');licenseButton.type='button';licenseButton.dataset.saCompanyLicense=company.id;licenseButton.className='admin-secondary';licenseButton.textContent='Gerir licenças';licenseButton.onclick=()=>{closeOverlay();window.CondominioSuperAdminLicenses?.open(company.id);};
   node.querySelector('.admin-company-kpis').after(licenseButton);
   node.querySelector('#adminCompanyForm')?.addEventListener('submit', async event => {
     event.preventDefault();
@@ -338,9 +338,7 @@ async function openCompany(companyId) {
     const values = Object.fromEntries(new FormData(form));
     const planId=values.plan_id,packs=Number(values.extra_packs||0);
     if(!quotePlan(planId,packs))return toast('Selecione um plano válido.','error');
-    delete values.plan_id;delete values.extra_packs;delete values.monthly_fee;
-    values.contract_start = values.contract_start || null;
-    values.contract_end = values.contract_end || null;
+    const cycle=values.cycle;delete values.cycle;delete values.plan_id;delete values.extra_packs;delete values.monthly_fee;
     const button = form.querySelector('button[type="submit"]');
     button.disabled = true;
     const { error } = await supabase.from('companies').update(values).eq('id', company.id);
@@ -348,7 +346,7 @@ async function openCompany(companyId) {
       button.disabled = false;
       return toast(error.message, 'error');
     }
-    const planResult=await supabase.rpc('set_company_license_plan',{p_company_id:company.id,p_plan_id:planId,p_extra_packs:packs});
+    const planResult=await supabase.rpc('configure_company_license_plan',{p_company_id:company.id,p_plan_id:planId,p_extra_packs:packs,p_billing_cycle:cycle});
     if(planResult.error){button.disabled=false;return toast('Dados guardados; não foi possível alterar o plano: '+planResult.error.message,'error');}
     companiesCache = [];
     toast('Empresa e plano atualizados.');

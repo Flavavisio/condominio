@@ -1,4 +1,4 @@
-import {resetDemo} from './demo-backend.js?v=20260927-company-plans-2';
+import {resetDemo} from './demo-backend.js?v=20260927-license-cycles-1';
 const select=document.querySelector('#demoRole');
 select.value=new URLSearchParams(location.search).get('role')==='resident'?'resident':'manager';
 select.onchange=()=>{const url=new URL(location.href);url.searchParams.set('role',select.value);url.searchParams.delete('condo');url.searchParams.delete('tab');location.href=url.href;};

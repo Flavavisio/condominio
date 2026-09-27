@@ -33,3 +33,7 @@ A Edge Function não substitui o SMTP de Supabase Auth. Confirmação de conta, 
 https://supabase.com/dashboard/project/pvfrlirjdauncoudkomu/auth/smtp
 
 A criação direta de utilizadores continua sem enviar palavras-passe por email.
+
+## Layout comum
+
+`supabase/functions/email-dispatch/layout.js` centraliza o HTML, alternativa de texto e logótipo PNG incorporado por CID. O PNG em `logo.js` é renderizado do logótipo oficial `assets/icons/cf-icon.svg`. Todos os avisos e o teste usam esta função. Cabeçalho azul-marinho com marca e slogan, mensagem, botão e contacto oficial no rodapé. Os campos variáveis são escapados como texto. Os emails de Auth permanecem por configurar separadamente.

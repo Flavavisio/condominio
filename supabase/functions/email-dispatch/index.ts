@@ -1,9 +1,7 @@
 import nodemailer from 'npm:nodemailer@10.0.11';
 import {createClient} from 'npm:@supabase/supabase-js@2.117.1';
-const sender='geral.condomia@gmail.com';
-const appUrl='https://flavavisio.github.io/condominio/app.html';
+import {emailLayout,sender} from './layout.js';
 const json=(data:unknown,status=200)=>Response.json(data,{status});
-const esc=(v:unknown)=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
 const safeError=(e:any)=>({code:String(e?.code||'ERROR').slice(0,50),smtp:Number(e?.responseCode)||null});
 Deno.serve(async req=>{
  if(req.method!=='POST')return json({error:'Método inválido'},405);
@@ -20,7 +18,7 @@ Deno.serve(async req=>{
   catch(e){const failure=safeError(e);await client.from('email_dispatch_config').update({last_error:JSON.stringify(failure)}).eq('id',1);return json({ok:false,...failure},502);}finally{transport.close();}
  }
  if(body.mode==='test'){
-  try{const result=await transport.sendMail({from:{name:'Condomia',address:sender},to:sender,replyTo:sender,subject:'Condomia · Teste do envio de email',text:'A ligação de email da Condomia foi configurada com sucesso. Este é um teste técnico enviado para a própria conta oficial.\n\nCondomia — Condomínio fácil'});return json({ok:Boolean(result.accepted?.length),testAccepted:Boolean(result.accepted?.length),sender});}
+  try{const result=await transport.sendMail({from:{name:'Condomia',address:sender},to:sender,replyTo:sender,subject:'Condomia · Teste do envio de email',...emailLayout('Teste do envio de email','A ligação de email da Condomia foi configurada com sucesso. Este teste apresenta o layout comum a todos os avisos, com o logótipo e o nome da Condomia.')});return json({ok:Boolean(result.accepted?.length),testAccepted:Boolean(result.accepted?.length),sender});}
   catch(e){return json({ok:false,...safeError(e)},502);}finally{transport.close();}
  }
  if(!config.enabled)return json({ok:true,paused:true});
@@ -40,7 +38,7 @@ Deno.serve(async req=>{
    if(!allowed){await update({status:'skipped',last_error:'Acesso ao aviso removido'});skipped++;continue;}
    try{
     const title=String(n.title).replace(/[\r\n]/g,' ').slice(0,200);
-    const result=await transport.sendMail({from:{name:'Condomia',address:sender},replyTo:sender,to:{address:recipient.user.email,name:''},subject:`Condomia · ${title}`,messageId:`<condomia-${n.id}@gmail.com>`,text:`${title}\n\n${n.body}\n\nAceder à Condomia: ${appUrl}\n\nCondomia — Condomínio fácil\n${sender}`,html:`<!doctype html><html lang="pt"><body style="margin:0;background:#f4f7fb;font-family:Arial,sans-serif;color:#18354d"><div style="max-width:600px;margin:24px auto;background:white;padding:32px;border-radius:16px"><p style="color:#137a8e;font-size:24px;font-weight:bold">Condomia</p><p>Condomínio fácil</p><h2>${esc(title)}</h2><p style="line-height:1.7;white-space:pre-line">${esc(n.body)}</p><p><a href="${appUrl}" style="display:inline-block;padding:14px 22px;background:#137a8e;color:white;text-decoration:none;border-radius:8px">Abrir aplicação</a></p><hr style="border:0;border-top:1px solid #e6ebf2"><p style="font-size:12px">Aviso automático da Condomia. Pode responder para ${sender}.</p></div></body></html>`});
+    const result=await transport.sendMail({from:{name:'Condomia',address:sender},replyTo:sender,to:{address:recipient.user.email,name:''},subject:`Condomia · ${title}`,messageId:`<condomia-${n.id}@gmail.com>`,...emailLayout(title,n.body)});
     if(!result.accepted?.length)throw Object.assign(new Error('Rejected'),{code:'ERECIPIENT',responseCode:550});
     await update({status:'sent',sent_at:new Date().toISOString(),last_error:null});sent++;
    }catch(e){

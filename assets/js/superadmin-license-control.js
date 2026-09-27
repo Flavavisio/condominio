@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js';
-import {planFields,bindPlanFields,planSummary,enrichLicensePlans} from './plans.js';
+import {planFields,bindPlanFields,planSummary,enrichLicensePlans,loadPlanCatalog} from './plans.js';
 
 let access = null;
 let currentUser = null;
@@ -88,6 +88,7 @@ function overlay(html) {
 }
 
 async function issueLicense(admin, refresh) {
+  try { await loadPlanCatalog(supabase); } catch(error) { alert(error.message); return; }
   const root = overlay(`<section class="cf-license-modal"><header><div><span>SUPER ADMIN · EMITIR</span><h2>${esc(admin.company_name)}</h2><p>${esc(admin.full_name)} · ${esc(admin.email)}</p></div><button data-sa-close>✕</button></header><form data-sa-form>
     ${planFields()}
     <label>Ciclo<select name="cycle"><option value="monthly">Mensal</option><option value="annual">Anual</option></select></label>
@@ -116,6 +117,7 @@ async function issueLicense(admin, refresh) {
 }
 
 async function editLicense(license, refresh) {
+  try { await loadPlanCatalog(supabase); } catch(error) { alert(error.message); return; }
   const root = overlay(`<section class="cf-license-modal"><header><div><span>SUPER ADMIN · EDITAR</span><h2>${esc(license.company_name || 'Licença')}</h2><p>${esc(license.full_name || license.email || '')}</p></div><button data-sa-close>✕</button></header><form data-sa-form>
     ${planFields(license.plan_id,license.extra_packs)}
     <label>Ciclo<select name="cycle"><option value="monthly" ${license.billing_cycle === 'monthly' ? 'selected' : ''}>Mensal</option><option value="annual" ${license.billing_cycle === 'annual' ? 'selected' : ''}>Anual</option></select></label>

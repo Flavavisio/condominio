@@ -1,7 +1,8 @@
 import {supabase} from './supabase.js';
-import {planFields,bindPlanFields,quotePlan} from './plans.js';
+import {planFields,bindPlanFields,quotePlan,loadPlanCatalog} from './plans.js';
 const check=r=>{if(r.error)throw r.error;return r.data;};
-export function openCompanySetup(onSaved){
+export async function openCompanySetup(onSaved){
+ try{await loadPlanCatalog(supabase);}catch(e){alert(e.message);return;}
  const root=document.createElement('div');root.className='modal-backdrop';root.innerHTML=`<div class="modal modal-wide" role="dialog" aria-modal="true" aria-label="Nova empresa gestora"><div class="modal-head"><div><span class="eyebrow blue">SUPER ADMIN</span><h2>Nova empresa gestora</h2></div><button type="button" data-setup-close>✕</button></div><form class="form-grid" id="companySetupForm">
  <h3 class="wide">Dados da empresa</h3><label>Nome legal<input name="name" required maxlength="160"></label><label>Marca / label<input name="label" required maxlength="160"></label><label>NIF<input name="nif" maxlength="30"></label><label>Email da empresa<input name="email" type="email"></label><label>Telefone<input name="phone"></label><label>Estado<select name="status"><option value="active">Ativa</option><option value="suspended">Suspensa</option><option value="cancelled">Cancelada</option></select></label><label>Início do contrato<input name="contract_start" type="date"></label><label>Fim do contrato<input name="contract_end" type="date"></label><label class="wide">Notas<textarea name="notes" rows="3"></textarea></label>
  <h3 class="wide">Plano e capacidade</h3>${planFields()}<label>Ciclo da licença<select name="cycle"><option value="monthly">Mensal</option><option value="annual">Anual</option></select></label><label>Início da licença<input name="license_start" type="date" required value="${new Date().toLocaleDateString('en-CA')}"></label>

@@ -231,3 +231,7 @@ Validação de permissões: `supabase/tests/condominium-photos.sql` (transação
 
 ### Criação completa de empresas pelo Super Admin
 Em **Empresas gestoras → Nova empresa**, o Super Admin preenche dados legais/comerciais, estado, contrato e notas, escolhe o plano do catálogo e packs adicionais com preço/capacidade calculados, e define logótipo/cor. Pode criar ou associar o administrador e emitir a licença mensal/anual na mesma operação, sem envio automático de email; contas existentes mantêm a palavra-passe. Pode também adiar o administrador/licença, ficando o plano configurado na empresa. Erros após criar a empresa permitem retomar no mesmo formulário, conservando o ID. Preço e capacidade são validados pelos triggers existentes e a licença usa `issue_planned_company_license`.
+
+### Gestão de empresas e planos
+
+A criação e edição de empresas e licenças carregam os planos ativos de `license_plans`. A mensalidade é calculada pelo plano e pelos packs adicionais de +10 (80 €/mês). A alteração do plano da empresa sincroniza as licenças ativas, preservando validade e estado. Apenas o módulo principal acrescenta a ação Gerir; Gerir licenças fecha a gestão da empresa antes de abrir a respetiva página.

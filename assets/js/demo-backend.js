@@ -1,5 +1,5 @@
 // Local-only data adapter for the actual application modules. No network or real Auth.
-const KEY='condomia-demo-workspace-v4';
+const KEY='condomia-demo-workspace-v5';
 const role=new URLSearchParams(location.search).get('role')==='resident'?'resident':'manager';
 const now=new Date(),iso=d=>d.toISOString(),day=d=>iso(d).slice(0,10),at=n=>new Date(now.getTime()+n*86400000);
 const user={id:role,email:role==='manager'?'sofia@example.invalid':'ana@example.invalid'};
@@ -21,6 +21,7 @@ function seed(){
  });
  db.condominium_members.push({id:'resident-member',condominium_id:'c1',fraction_id:'c1-f1',user_id:'resident',member_role:'owner',status:'active',is_condominium_admin:false,permissions:{}});
  db.payment_proofs.push({id:'proof1',condominium_id:'c1',fraction_id:'c1-f1',charge_id:'c1-f1-quota',submitted_by:'resident',amount:75,paid_on:day(now),method:'transfer',file_name:'Comprovativo-exemplo.txt',file_path:'demo-proof.txt',status:'pending',created_at:stamp()});
+ db.license_plans=[[1,11.9],[10,80],[50,380],[100,650],[200,1200]].map(([n,price])=>({id:'condomia_'+n,name:'Condomia '+n,condominium_limit:n,monthly_price:price,active:true,vat_included:true}));
  db.bank_movements=[];db.condominium_budgets=[];db.expense_documents=[];
  db.service_contracts=[];db.condominium_expenses=[];db.condominium_balance_settings=[];db.periodic_services=[];
  for(const c of db.condominiums){const first=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;

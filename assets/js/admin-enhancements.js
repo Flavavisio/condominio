@@ -1,3 +1,4 @@
+import {planFields,bindPlanFields,loadPlanCatalog,quotePlan} from './plans.js';
 import { supabase } from './supabase.js';
 
 let currentUser = null;
@@ -252,6 +253,7 @@ function memberRow(member) {
 
 async function openCompany(companyId) {
   if (!access?.is_super_admin) return;
+  try{await loadPlanCatalog(supabase);}catch(e){return toast(e.message,'error');}
   const [{ data: company, error: companyError }, { data: members, error: membersError }, condoCountResult] = await Promise.all([
     supabase.from('companies').select('*').eq('id', companyId).maybeSingle(),
     supabase.rpc('list_company_users', { p_company_id: companyId }),
@@ -285,7 +287,7 @@ async function openCompany(companyId) {
             <label>NIF<input name="nif" value="${esc(company.nif || '')}"></label>
             <label>Email<input name="email" type="email" value="${esc(company.email || '')}"></label>
             <label>Telefone<input name="phone" value="${esc(company.phone || '')}"></label>
-            <label>Plano<input value="${esc(company.plan||'Por definir')}" readonly><small>Alterar em Gerir licenças.</small></label>
+            ${planFields(company.license_plan_id,company.extra_packs||0)}
             <label>Mensalidade (€)<input name="monthly_fee" readonly type="number" step="0.01" value="${Number(company.monthly_fee || 0)}"></label>
             <label>Estado<select name="status"><option value="active" ${company.status === 'active' ? 'selected' : ''}>Ativa</option><option value="suspended" ${company.status === 'suspended' ? 'selected' : ''}>Suspensa</option><option value="cancelled" ${company.status === 'cancelled' ? 'selected' : ''}>Cancelada</option></select></label>
             <label>Início contrato<input name="contract_start" type="date" value="${esc(company.contract_start || '')}"></label>
@@ -327,11 +329,16 @@ async function openCompany(companyId) {
       </div>
     </section>`);
 
+  bindPlanFields(node);
+  const licenseButton=document.createElement('button');licenseButton.type='button';licenseButton.className='admin-secondary';licenseButton.textContent='Gerir licenças';licenseButton.onclick=()=>{closeOverlay();window.CondominioSuperAdminLicenses?.open(company.id);};
+  node.querySelector('.admin-company-kpis').after(licenseButton);
   node.querySelector('#adminCompanyForm')?.addEventListener('submit', async event => {
     event.preventDefault();
     const form = event.currentTarget;
     const values = Object.fromEntries(new FormData(form));
-    values.monthly_fee = Number(values.monthly_fee || 0);
+    const planId=values.plan_id,packs=Number(values.extra_packs||0);
+    if(!quotePlan(planId,packs))return toast('Selecione um plano válido.','error');
+    delete values.plan_id;delete values.extra_packs;delete values.monthly_fee;
     values.contract_start = values.contract_start || null;
     values.contract_end = values.contract_end || null;
     const button = form.querySelector('button[type="submit"]');
@@ -341,8 +348,10 @@ async function openCompany(companyId) {
       button.disabled = false;
       return toast(error.message, 'error');
     }
+    const planResult=await supabase.rpc('set_company_license_plan',{p_company_id:company.id,p_plan_id:planId,p_extra_packs:packs});
+    if(planResult.error){button.disabled=false;return toast('Dados guardados; não foi possível alterar o plano: '+planResult.error.message,'error');}
     companiesCache = [];
-    toast('Empresa atualizada.');
+    toast('Empresa e plano atualizados.');
     setTimeout(() => location.reload(), 450);
   });
 

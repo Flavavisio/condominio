@@ -1,7 +1,7 @@
 import {createClient} from 'npm:@supabase/supabase-js@2.117.1';
 import {validateConfig,companyTransport,safeError} from '../_shared/mail.ts';
 import {emailLayout,appUrl} from '../email-dispatch/layout.js';
-const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info','Access-Control-Allow-Methods':'POST, OPTIONS'};
+const cors={'Access-Control-Allow-Origin':'*','Access-Control-Allow-Headers':'authorization, apikey, content-type, x-client-info, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version','Access-Control-Allow-Methods':'POST, OPTIONS'};
 const json=(v:unknown,status=200)=>Response.json(v,{status,headers:cors});
 Deno.serve(async req=>{
  if(req.method==='OPTIONS')return new Response(null,{status:204,headers:cors});

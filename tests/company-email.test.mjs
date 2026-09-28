@@ -9,6 +9,7 @@ const client={auth:{getUser:async()=>({data:{user:valid?{id:'admin',email:'admin
 const source=stripTypeScriptTypes(readFileSync(new URL('../supabase/functions/company-email/index.ts',import.meta.url),'utf8').replace(/^import .*\n/gm,''));
 vm.runInNewContext(source,{Response,Request,Date,Promise,createClient:()=>client,validateConfig:v=>v,companyTransport:async()=>({sendMail:async v=>{mailCount++;lastMail=v;if(fail)throw {code:'EAUTH',message:config.password};return {accepted:['admin@example.invalid']}},close(){}}),safeError:e=>({code:e.code}),emailLayout:()=>({text:'Fixture'}),appUrl:'https://test.invalid',Deno:{env:{get:()=> 'fixture'},serve:fn=>handler=fn}});
 const request=(action,extra={})=>new Request('https://test.invalid',{method:'POST',headers:{Authorization:'Bearer fixture'},body:JSON.stringify({companyId,action,...extra})});
+const preflight=await handler(new Request('https://test.invalid',{method:'OPTIONS'}));assert.equal(preflight.status,204);assert.match(preflight.headers.get('Access-Control-Allow-Headers'),/x-supabase-client-platform/);
 valid=false;assert.equal((await handler(request('get'))).status,401);assert.equal(secretReads,0);valid=true;
 role='staff';assert.equal((await handler(request('get'))).status,403);assert.equal(secretReads,0);
 role=null;assert.equal((await handler(request('save',{config}))).status,403);assert.equal(secretReads,0);

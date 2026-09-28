@@ -23,6 +23,9 @@ begin
  set local role service_role;
  if not public.can_receive_notification_email(n) then raise exception 'TEST FAILED recipient denied';end if;
  update public.email_dispatch_config set enabled=true where id=1;
+ update public.notification_emails set next_attempt_at=now()+interval '1 day' where notification_id not in(select id from public.notifications where condominium_id=condo);
+ if exists(select 1 from public.claim_notification_email()) then raise exception 'TEST FAILED unconfigured SMTP claimed';end if;
+ insert into public.company_smtp(company_id,secret_id,verified_at) values(co,gen_random_uuid(),now());
  select notification_id into claimed from public.claim_notification_email();
  if claimed is null or not exists(select 1 from public.notification_emails where notification_id=claimed and status='sending' and attempts=1) then raise exception 'TEST FAILED atomic claim';end if;
  if exists(select 1 from public.claim_notification_email() where notification_id=claimed) then raise exception 'TEST FAILED duplicate claim';end if;

@@ -3,9 +3,9 @@ import {stripTypeScriptTypes} from 'node:module';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
 const source=stripTypeScriptTypes(readFileSync(new URL('../supabase/functions/invite-member/index.ts',import.meta.url),'utf8').replace(/^import .*\n/,''));
-let fractionCompany='company',assigned=true,residentAssociation=null;
+let fractionCompany='company',assigned=true,residentAssociation=null,smtpReady=true;
 let handler,role='admin',licensed=true,validToken=true,created=0,invited=0,associated=null,authCalls=0;
-const client={auth:{getUser:async()=>{authCalls++;return {data:{user:validToken?{id:'admin'}:null},error:validToken?null:new Error('Invalid')}} ,admin:{inviteUserByEmail:async()=>{invited++;return {data:{user:{id:'invited-user'}}}},listUsers:async()=>({data:{users:[]}}),createUser:async()=>{created++;return {data:{user:{id:'new-user'}}}}}},from(table){const q={select(){return q},eq(){return q},lte(){return q},gte(){return q},limit(){return q},is(){return q},insert:async v=>{residentAssociation=v;return {error:null}},maybeSingle:async()=>({data:table==='condominiums'?{id:'condo',company_id:'company'}:table==='fractions'?{id:'fraction',condominium_id:fractionCompany,status:'active'}:table==='condominium_staff_assignments'?(assigned?{id:'assignment'}:null):table==='profiles'?{is_super_admin:false}:table==='company_members'?{role,status:'active'}:table==='company_admin_licenses'&&licensed?{id:'license'}:null}),upsert:async v=>{associated=v;return {error:null}}};return q}};
+const client={auth:{getUser:async()=>{authCalls++;return {data:{user:validToken?{id:'admin'}:null},error:validToken?null:new Error('Invalid')}} ,admin:{inviteUserByEmail:async()=>{invited++;return {data:{user:{id:'invited-user'}}}},listUsers:async()=>({data:{users:[]}}),createUser:async()=>{created++;return {data:{user:{id:'new-user'}}}}}},from(table){const q={select(){return q},eq(){return q},lte(){return q},gte(){return q},limit(){return q},is(){return q},insert:async v=>{residentAssociation=v;return {error:null}},maybeSingle:async()=>({data:table==='condominiums'?{id:'condo',company_id:'company'}:table==='fractions'?{id:'fraction',condominium_id:fractionCompany,status:'active'}:table==='condominium_staff_assignments'?(assigned?{id:'assignment'}:null):table==='company_smtp'?(smtpReady?{verified_at:'2026-09-28'}:null):table==='profiles'?{is_super_admin:false}:table==='company_members'?{role,status:'active'}:table==='company_admin_licenses'&&licensed?{id:'license'}:null}),upsert:async v=>{if(table==='company_members')associated=v;return {error:null}}};return q}};
 vm.runInNewContext(source,{Response,Request,Date,createClient:()=>client,Deno:{env:{get:()=> 'test-only'},serve:fn=>{handler=fn}}});
 const request=(method,token,body)=>new Request('https://test.invalid',{method,headers:{...(token?{Authorization:'Bearer '+token}:{}),'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});
 const payload={email:'fixture@example.invalid',password:'test-fixture-only',companyId:'company',companyRole:'staff'};
@@ -15,7 +15,7 @@ r=await handler(request('POST',null,payload));assert.equal(r.status,401);
 validToken=false;r=await handler(request('POST','invalid',payload));assert.equal(r.status,401);validToken=true;
 role='staff';r=await handler(request('POST','fixture',payload));assert.equal(r.status,403);assert.equal(created,0);
 role='admin';licensed=false;r=await handler(request('POST','fixture',payload));assert.equal(r.status,403);assert.equal(created,0);
-licensed=true;r=await handler(request('POST','fixture',payload));assert.equal(r.status,200);assert.equal(r.headers.get('access-control-allow-origin'),'*');assert.equal(created,1);assert.equal(associated.role,'staff');assert.equal(associated.company_id,'company');assert.equal((await r.json()).created,true);
+licensed=true;r=await handler(request('POST','fixture',payload));assert.equal(r.status,200);assert.equal(r.headers.get('access-control-allow-origin'),'*');assert.equal(created,0);assert.equal(invited,1);assert.equal(associated.role,'staff');assert.equal(associated.company_id,'company');assert.equal((await r.json()).created,true);
 console.log('PASS: preflight, error CORS, missing/invalid auth, staff rejection, inactive license rejection and authorized creation with mocked Auth.');
 
 const residentPayload={email:'resident-fixture@example.invalid',password:'test-fixture-only',condominiumId:'condo',fractionId:'fraction',memberRole:'owner'};
@@ -28,4 +28,7 @@ r=await handler(request('POST','fixture',payload));assert.equal(r.status,403);
 role='staff';r=await handler(request('POST','fixture',residentPayload));assert.equal(r.status,403);
 console.log('PASS: resident account stays outside company team; foreign fraction rejected; only admin or assigned manager can provision a fraction.');
 
-role="admin";r=await handler(request("POST","fixture",{...payload,password:""}));assert.equal(r.status,200);assert.equal(invited,1);assert.equal(associated.user_id,"invited-user");console.log("PASS invitation without password uses Auth invite API");
+role="admin";r=await handler(request("POST","fixture",{...payload,password:""}));assert.equal(r.status,200);assert.equal(invited,4);assert.equal(associated.user_id,"invited-user");console.log("PASS invitation without password uses Auth invite API");
+
+smtpReady=false;const sentBefore=invited;r=await handler(request('POST','fixture',payload));assert.equal(r.status,400);assert.equal(invited,sentBefore);assert.match((await r.json()).error,/SMTP/);
+r=await handler(request('POST','fixture',{...payload,companyRole:'admin'}));assert.equal(r.status,200);assert.equal(invited,sentBefore+1);assert.equal(created,0);console.log('PASS SMTP required for company invites, platform admin invitation independent; no account pre-confirmed');

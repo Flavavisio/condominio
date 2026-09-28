@@ -1,3 +1,4 @@
+import {openCompanyEmail} from './company-email.js';
 import {planFields,bindPlanFields,loadPlanCatalog,quotePlan,cycleField} from './plans.js';
 import { supabase } from './supabase.js';
 
@@ -75,13 +76,13 @@ async function loadBrandCompany() {
   }
   const { data: memberships, error } = await supabase
     .from('company_members')
-    .select('company_id')
+    .select('company_id,role')
     .eq('user_id', currentUser.id)
     .eq('status', 'active')
     .limit(1);
   if (error || !memberships?.length) return;
   const { data: company } = await supabase.from('companies').select('*').eq('id', memberships[0].company_id).maybeSingle();
-  brandedCompany = company || null;
+  brandedCompany = company ? {...company,myRole:memberships[0].role} : null;
 }
 
 function applyBranding() {
@@ -450,6 +451,10 @@ function scheduleEnhance() {
   clearTimeout(enhanceTimer);
   enhanceTimer = setTimeout(() => {
     injectUsersNav();
+    const settings=document.querySelector('#settingsTools');
+    if(settings && brandedCompany?.myRole==='admin' && !settings.querySelector('[data-company-email]')){
+      const button=document.createElement('button');button.type='button';button.className='ghost-btn';button.dataset.companyEmail='1';button.textContent='Email da empresa';button.onclick=()=>openCompanyEmail(brandedCompany);settings.append(button);
+    }
     applyBranding();
     enhanceCompanyRows();
   }, 60);

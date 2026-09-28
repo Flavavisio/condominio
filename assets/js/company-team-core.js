@@ -199,9 +199,9 @@ function openInvite() {
       <form id="cfTeamCoreInvite" class="cf-team-form">
         <label>Nome completo<input name="fullName" required placeholder="João Silva"></label>
         <label>Email<input name="email" type="email" required placeholder="joao@empresa.pt"></label>
-        <label>Password inicial<input name="password" type="password" required minlength="8" autocomplete="new-password" placeholder="Mínimo 8 caracteres"></label>
+
         <label>Função<select name="role"><option value="manager">Gestor</option><option value="staff">Funcionário</option></select></label>
-        <div class="cf-team-note wide">A conta é criada diretamente. Entregue o email e a password inicial ao colaborador. O Administrador continua a ser o único perfil que gere a equipa.</div>
+        <div class="cf-team-note wide">O colaborador recebe um convite pelo SMTP da empresa para ativar a conta e definir a palavra-passe. Configure e teste primeiro o SMTP em Configurações → Email. O Administrador continua a ser o único perfil que gere a equipa.</div>
         <div class="cf-team-form-actions wide"><button type="button" class="cf-team-secondary" data-team-close>Cancelar</button><button type="submit" class="cf-team-primary">Criar conta</button></div>
       </form>
     </section>`);
@@ -231,7 +231,7 @@ function openInvite() {
     }
 
     root.remove();
-    toast(data?.created ? 'Conta criada e associada à empresa.' : 'O email já existia e foi associado à empresa.');
+    toast(data?.created ? 'Convite enviado e conta associada à empresa.' : 'O email já existia e foi associado à empresa.');
     await openTeam();
   });
 }

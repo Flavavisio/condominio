@@ -18,7 +18,7 @@ Os modos autenticados `verify` (apenas autenticação SMTP) e `test` (email fixo
 
 Teste transacional: `supabase/tests/email-delivery.sql`.
 
-## Emails de autenticação: hook preparado, ativação no dashboard pendente
+## Emails de autenticação: hook ativo; segredo de assinatura por corrigir
 
 A Edge Function `auth-email` está publicada. Usa o mesmo Gmail e layout, verifica assinaturas Standard Webhooks e suporta confirmação, recuperação, convite, acesso por link, alteração de email (incluindo confirmação dupla) e código de reautenticação. Nunca envia palavras-passe. O endpoint recusa pedidos sem assinatura válida.
 
@@ -31,12 +31,30 @@ Ativar em https://supabase.com/dashboard/project/pvfrlirjdauncoudkomu/auth/hooks
 
 O hook substitui o SMTP de Auth; não é necessário duplicar a palavra-passe Gmail nas definições SMTP. O SMTP alternativo permanece válido se o hook não for usado.
 
-A página `auth.html` permite pedir recuperação e confirmar links apenas após clicar, para evitar consumo automático por scanners. Links de recuperação/convite permitem definir uma palavra-passe; a aplicação tem o link “Esqueci-me da palavra-passe”. A função invite-member usa convite Auth quando não é fornecida uma palavra-passe; a criação direta com palavra-passe continua a manter o comportamento existente.
+A página `auth.html` permite pedir recuperação e confirmar links apenas após clicar, para evitar consumo automático por scanners. Links de recuperação/convite permitem definir uma palavra-passe; a aplicação tem o link “Esqueci-me da palavra-passe”. A função invite-member envia um convite Auth para todas as novas contas, mesmo que um cliente antigo envie uma palavra-passe. Nunca cria contas novas já confirmadas. Contas existentes conservam identidade e palavra-passe.
 
 Adicionar `https://flavavisio.github.io/condominio/auth.html*` aos Redirect URLs e usar `https://flavavisio.github.io/condominio/app.html` como Site URL. Os links do hook apontam diretamente para a página de confirmação do projeto.
 
-Validação local concluída para o fluxo de confirmação e recuperação com Auth simulado. O teste integrado de envio Auth depende da ativação do hook e do segredo de assinatura no dashboard.
+Validação local concluída para o fluxo de confirmação e recuperação com Auth simulado. O hook foi ativado pelo proprietário. No teste integrado de 28/09/2026 às 14:56 UTC, a função recusou o segredo com `secret_encoding` (sem prefixo de versão ou assinatura). É necessário guardar o segredo de assinatura do Send Email Hook em `SEND_EMAIL_HOOK_SECRET`, distinto da palavra-passe Gmail. Não foi enviado email de recuperação nesse teste.
 
 ## Layout comum
 
 `supabase/functions/email-dispatch/layout.js` centraliza o HTML, alternativa de texto e logótipo PNG incorporado por CID. O PNG em `logo.js` é renderizado do logótipo oficial `assets/icons/cf-icon.svg`. Todos os avisos e o teste usam esta função. Cabeçalho azul-marinho com marca e slogan, mensagem, botão e contacto oficial no rodapé. Os campos variáveis são escapados como texto. O layout também é usado pelo hook de Auth preparado.
+
+
+## SMTP por empresa (28/09/2026)
+
+O administrador abre **Configurações → Email da empresa**, indica servidor público, porta 465/TLS ou 587/2525/STARTTLS, utilizador, palavra-passe de aplicação, remetente e endereço de resposta. Guarda e testa. O teste envia apenas para o email da própria conta autenticada; exige um intervalo de um minuto. Uma alteração invalida a validação anterior; palavra-passe vazia preserva a existente. A interface nunca recebe o segredo guardado.
+
+- Condomia/Gmail: destinatário Super Admin ou administrador da empresa; ativação/recuperação dos administradores.
+- SMTP da gestora: funcionários e condóminos, incluindo convites e recuperação. Marca e contactos da empresa no layout comum; logótipo HTTPS da empresa quando configurado.
+- Sem SMTP validado: novos convites da empresa são recusados antes de criar contas; notificações ficam pendentes sem consumir tentativas. Não há fallback para Gmail Condomia.
+- Em erros de entrega, a configuração mostra o estado e os totais pendentes/em revisão. A fila retoma os pendentes automaticamente; entregas incertas não são repetidas. A revisão de entrega incerta é administrativa no servidor.
+- Identidade em várias empresas, sem perfil de administrador: recuperação recusa encaminhamento ambíguo. Não escolhe silenciosamente outra empresa.
+- Convites e recuperação são pedidos de Auth síncronos, não a fila de notificações. Em falha, o utilizador deve repetir o pedido; não são anunciados como enviados.
+
+`company-email` valida a sessão e a associação ativa como administrador da empresa. `company_smtp` e `auth_email_routes` não têm privilégios de cliente; as credenciais JSON ficam cifradas no Vault. As funções privadas de acesso ao Vault só podem ser executadas pela service_role, com validação explícita desse papel. A remoção da configuração elimina o segredo cifrado. O transporte exige TLS, resolve um IPv4 público e fixa esse endereço para evitar acesso a redes internas e troca de DNS.
+
+A rota de Auth vem de associações na base de dados ou da intenção de convite gravada pelo servidor, nunca de user_metadata. Registos públicos sem associações destinam-se a candidatos a administrador da plataforma. Contas sem associações não recebem recuperação pelo remetente da plataforma.
+
+Verificação: `tests/company-email.test.mjs`, `tests/invite-member.test.mjs`, `supabase/tests/company-smtp.sql`, `supabase/tests/email-delivery.sql`; formulário validado em 390px e 1280px. O envio real por um SMTP de empresa requer que o administrador configure e teste as suas credenciais.

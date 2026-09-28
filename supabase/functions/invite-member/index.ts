@@ -129,10 +129,14 @@ Deno.serve(async (req: Request) => {
   }
 
   if (!targetUser) {
-    if (password && password.length < 8) return json({ error: "Defina uma password inicial com pelo menos 8 caracteres." }, 400);
-    const creation = password
-      ? await admin.auth.admin.createUser({email,password,email_confirm:true,user_metadata:fullName?{full_name:fullName}:undefined})
-      : await admin.auth.admin.inviteUserByEmail(email,{data:fullName?{full_name:fullName}:undefined,redirectTo:'https://flavavisio.github.io/condominio/auth.html'});
+    const routeCompany = companyId && companyRole === 'admin' ? null : targetCompanyId;
+    if(routeCompany){
+      const {data:smtp,error:smtpError}=await admin.from('company_smtp').select('verified_at').eq('company_id',routeCompany).maybeSingle();
+      if(smtpError||!smtp?.verified_at)return json({error:'Configure e teste o SMTP da empresa em Configurações → Email antes de enviar convites.'},400);
+    }
+    const {error:routeError}=await admin.from('auth_email_routes').upsert({email,company_id:routeCompany,expires_at:new Date(Date.now()+86400000).toISOString()});
+    if(routeError)return json({error:'Não foi possível preparar o convite.'},500);
+    const creation = await admin.auth.admin.inviteUserByEmail(email,{data:fullName?{full_name:fullName}:undefined,redirectTo:'https://flavavisio.github.io/condominio/auth.html'});
     const {data:createData,error:createError}=creation;
     if (createError || !createData?.user) {
       return json({ error: createError?.message || "Não foi possível criar o utilizador." }, 400);

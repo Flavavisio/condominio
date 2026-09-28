@@ -44,7 +44,26 @@ function resetBranding() {
   if (sub) sub.textContent = 'Condomínio fácil';
 }
 
+function applyLoadingBrand() {
+  const screen=document.querySelector('.boot-screen');
+  if(!screen)return;
+  const company=access && !access.is_super_admin ? brandedCompany : null;
+  const label=company?.label||company?.name||'Condomia';
+  const fallback=new URL('./assets/icons/cf-icon.svg',document.baseURI).href;
+  let logo=fallback;
+  try{const url=new URL(company?.logo_url||fallback,document.baseURI);if(url.protocol==='https:'||url.origin===location.origin)logo=url.href;}catch{}
+  const img=screen.querySelector('.boot-logo img'),title=screen.querySelector('strong');
+  if(title && title.textContent!==label)title.textContent=label;
+  if(img){
+    // A failed company image falls back once, without an observer retry loop.
+    if(img.dataset.requestedLogo!==logo){img.dataset.requestedLogo=logo;img.src=logo;}
+    if(img.alt!==label)img.alt=label;
+    img.onerror=()=>{if(img.src!==fallback)img.src=fallback;};
+  }
+}
+
 function applyCompanyBranding() {
+  applyLoadingBrand();
   if (document.querySelector('.mockup-shell')) {
     const title = brandedCompany && !access?.is_super_admin ? `${brandedCompany.label || brandedCompany.name} · Condomia` : DEFAULTS.title;
     if (document.title !== title) document.title = title;
@@ -129,6 +148,7 @@ async function refreshBrandContext() {
   userId = user?.id || null;
   access = null;
   brandedCompany = null;
+  applyLoadingBrand();
 
   if (!userId) return;
 

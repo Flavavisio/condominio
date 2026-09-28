@@ -828,7 +828,7 @@ function render() {
   }
   if (isSuperAdmin() && !['dashboard','companies','settings','profile'].includes(state.view)) state.view='dashboard';
   if (state.loading) {
-    app.innerHTML = '<div class="boot-screen"><div class="boot-mark">C</div><strong>Condomia</strong><span>A sincronizar com Supabase…</span></div>';
+    app.innerHTML = '<div class="boot-screen" role="status" aria-live="polite"><div class="boot-logo"><img src="./assets/icons/cf-icon.svg" alt="Condomia"></div><strong>Condomia</strong><span>A carregar dados…</span></div>';
     return;
   }
 

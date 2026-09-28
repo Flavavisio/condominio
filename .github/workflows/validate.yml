@@ -26,3 +26,5 @@ jobs:
         run: node tests/expenses.test.mjs
       - name: Validate bank import and matching
         run: node tests/bank-math.test.mjs
+      - name: Validate financial reports
+        run: node tests/reports.test.mjs && node tests/report-finance.test.mjs

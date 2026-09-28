@@ -7,8 +7,13 @@ Deno.serve(async req=>{
  const secret=Deno.env.get('SEND_EMAIL_HOOK_SECRET');
  if(!secret)return Response.json({error:{message:'Email de autenticação ainda não configurado',http_code:503}},{status:503});
  let payload:any;
- try{payload=new Webhook(secret.replace(/^v1,whsec_/, '')).verify(await req.text(),Object.fromEntries(req.headers));}
- catch{return new Response('Assinatura inválida',{status:401});}
+ try{payload=new Webhook(secret.trim().replace(/^v1,/, '')).verify(await req.text(),Object.fromEntries(req.headers));}
+ catch(error){
+  const message=String((error as Error)?.message||'');
+  const reason=/timestamp.*old/i.test(message)?'timestamp_old':/timestamp.*future/i.test(message)?'timestamp_future':/header/i.test(message)?'headers_missing':/base64|character|decode/i.test(message)?'secret_encoding':/signature/i.test(message)?'signature_mismatch':'verification_error';
+  console.warn(JSON.stringify({event:'auth_email_signature_rejected',reason,errorType:(error as Error)?.name,hasVersionPrefix:secret.trim().startsWith('v1,'),hasSigningPrefix:secret.trim().includes('whsec_')}));
+  return new Response('Assinatura inválida',{status:401});
+ }
  const user=payload.user,data=payload.email_data,kind=data?.email_action_type;
  const labels:Record<string,[string,string,string]>={
  signup:['Confirme a sua conta','Confirme o seu endereço de email para concluir o registo na Condomia.','Confirmar email'],

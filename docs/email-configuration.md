@@ -18,7 +18,7 @@ Os modos autenticados `verify` (apenas autenticação SMTP) e `test` (email fixo
 
 Teste transacional: `supabase/tests/email-delivery.sql`.
 
-## Emails de autenticação: hook ativo; segredo de assinatura por corrigir
+## Emails de autenticação: hook ativo e recuperação confirmada
 
 A Edge Function `auth-email` está publicada. Usa o mesmo Gmail e layout, verifica assinaturas Standard Webhooks e suporta confirmação, recuperação, convite, acesso por link, alteração de email (incluindo confirmação dupla) e código de reautenticação. Nunca envia palavras-passe. O endpoint recusa pedidos sem assinatura válida.
 
@@ -35,7 +35,7 @@ A página `auth.html` permite pedir recuperação e confirmar links apenas após
 
 Adicionar `https://flavavisio.github.io/condominio/auth.html*` aos Redirect URLs e usar `https://flavavisio.github.io/condominio/app.html` como Site URL. Os links do hook apontam diretamente para a página de confirmação do projeto.
 
-Validação local concluída para o fluxo de confirmação e recuperação com Auth simulado. O hook foi ativado pelo proprietário. No teste integrado de 28/09/2026 às 14:56 UTC, a função recusou o segredo com `secret_encoding` (sem prefixo de versão ou assinatura). É necessário guardar o segredo de assinatura do Send Email Hook em `SEND_EMAIL_HOOK_SECRET`, distinto da palavra-passe Gmail. Não foi enviado email de recuperação nesse teste.
+Validação local concluída para confirmação e recuperação com Auth simulado. Após a correção do segredo do hook em 28/09/2026, o pedido real de recuperação devolveu HTTP 200 e o proprietário confirmou a receção do email. A ativação de uma nova conta ainda não teve confirmação de receção num teste integral.
 
 ## Layout comum
 
@@ -58,3 +58,9 @@ O administrador abre **Configurações → Email da empresa**, indica servidor p
 A rota de Auth vem de associações na base de dados ou da intenção de convite gravada pelo servidor, nunca de user_metadata. Registos públicos sem associações destinam-se a candidatos a administrador da plataforma. Contas sem associações não recebem recuperação pelo remetente da plataforma.
 
 Verificação: `tests/company-email.test.mjs`, `tests/invite-member.test.mjs`, `supabase/tests/company-smtp.sql`, `supabase/tests/email-delivery.sql`; formulário validado em 390px e 1280px. O envio real por um SMTP de empresa requer que o administrador configure e teste as suas credenciais.
+
+## Quotas automáticas e centro de emails
+
+Em Financeiro, o gestor pode ativar uma regra mensal por condomínio, com valor fixo por fração ou total distribuído por permilagem. A tarefa diária das 08:10 UTC emite as quotas; valores já emitidos não mudam ao editar a regra. Os lembretes opcionais começam sete dias após o vencimento, no máximo um por semana e destinatário, e são suspensos com comprovativo pendente. Reativar uma regra recupera meses em falta desde o início configurado, até 24 meses.
+
+Configurações → Centro de emails mostra os avisos operacionais da própria empresa, estado SMTP, tentativas e falhas. Apenas pendentes e tentativas seguras podem regressar à fila. Convites e recuperação continuam síncronos, fora deste histórico.

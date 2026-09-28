@@ -26,14 +26,17 @@ export function parseBankRows(rows,mapping,condo,account){
 }
 export function suggestMovement(m,fractions,payments,expenses,movements=[]){
  const usedPayments=new Set(movements.filter(x=>x.status==='reconciled').map(x=>x.payment_id));
- if(m.amount<0){const found=expenses.filter(e=>e.status!=='cancelled'&&Number(e.amount)===Math.abs(Number(m.amount))&&e.invoice_ref&&normalize(m.description+' '+m.reference).includes(normalize(e.invoice_ref))&&!movements.some(x=>x.expense_id===e.id&&x.status==='reconciled'));return found.length===1?{value:'e:'+found[0].id,reason:'Referência da fatura e valor'}:{value:'',reason:'Selecione a despesa'};}
+ if(m.amount<0){const found=expenses.filter(e=>e.status!=='cancelled'&&Number(e.amount)===Math.abs(Number(m.amount))&&e.invoice_ref&&normalize(m.description+' '+m.reference).includes(normalize(e.invoice_ref))&&!movements.some(x=>x.expense_id===e.id&&x.status==='reconciled'));return found.length===1?{value:'e:'+found[0].id,reason:'Referência da fatura e valor',confidence:'high'}:{value:'',reason:'Selecione a despesa'};}
+ fractions=fractions.filter(f=>!f.status||f.status==='active');
  const text=normalize(`${m.description} ${m.reference} ${m.sender}`);
  const matched=fractions.filter(f=>{const code=normalize(f.code).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');return new RegExp(`(?:fracao|frac|fr|apartamento)\\s*[.:#-]?\\s*${code}(?![a-z0-9])`).test(text);});
  const possible=payments.filter(p=>Number(p.amount)===Number(m.amount)&&Math.abs(new Date(p.paid_on)-new Date(m.booked_on))<=3*86400000&&!usedPayments.has(p.id));
+ if(matched.length===1&&possible.some(p=>m.reference&&normalize(m.reference)===normalize(p.reference)&&p.fraction_id!==matched[0].id))return {value:'',reason:'A referência e a fração indicam pagamentos diferentes: confirme manualmente',confidence:'ambiguous'};
  const exact=possible.filter(p=>(m.reference&&normalize(m.reference)===normalize(p.reference))||(matched.length===1&&p.fraction_id===matched[0].id));
- if(exact.length===1)return {value:'p:'+exact[0].id,reason:'Pagamento já registado — não será duplicado'};
+ if(exact.length>1)return {value:'',reason:'Vários pagamentos correspondem à referência: escolha manualmente',confidence:'ambiguous'};
+ if(exact.length===1)return {value:'p:'+exact[0].id,reason:'Referência ou fração, valor e data coincidem com pagamento registado',confidence:'high'};
  if(possible.length)return {value:'',reason:'Possível pagamento existente: reveja antes de criar'};
- if(matched.length===1)return {value:'f:'+matched[0].id,reason:'Código da fração na descrição'};
+ if(matched.length===1)return {value:'f:'+matched[0].id,reason:'Código da fração na descrição — confirme o titular e o valor',confidence:'medium'};
  const habitual=movements.filter(x=>x.status==='reconciled'&&x.fraction_id&&m.sender&&normalize(x.sender)===normalize(m.sender));const ids=[...new Set(habitual.map(x=>x.fraction_id))];
- return ids.length===1?{value:'f:'+ids[0],reason:'Remetente já associado a esta fração'}:{value:'',reason:matched.length>1?'Referência ambígua':'Sem correspondência segura'};
+ return ids.length===1&&fractions.some(f=>f.id===ids[0])?{value:'f:'+ids[0],reason:'Remetente já associado a esta fração — confirme o valor',confidence:'medium'}:{value:'',reason:matched.length>1?'Referência ambígua':'Sem correspondência segura'};
 }

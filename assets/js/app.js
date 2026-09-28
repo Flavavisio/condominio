@@ -739,7 +739,7 @@ function searchView() {
 function bind() {
   if(state.user && state.view==='dashboard' && !isResidentOnly() && !isSuperAdmin()) {
     const main=document.querySelector('.main');
-    if(main){const alerts=document.createElement('div');alerts.className='fo-dashboard-alerts';main.append(alerts);mountDashboardAlerts(alerts,ui.scopedCondos(state));alerts.onclick=e=>{const b=e.target.closest('[data-alert-condo]');if(b){state.selectedCondoId=b.dataset.alertCondo;state.condoTab='finance';state.view='condo';render();}};}
+    if(main){const alerts=document.createElement('div');alerts.className='fo-dashboard-alerts';main.append(alerts);mountDashboardAlerts(alerts,ui.scopedCondos(state),state.issues);alerts.onclick=e=>{const b=e.target.closest('[data-alert-condo]');if(b){state.selectedCondoId=b.dataset.alertCondo;state.condoTab=b.dataset.alertTab||'finance';state.view='condo';render();}};}
   }
   const residentFinanceHost=document.querySelector('#residentFinance');
   if(residentFinanceHost&&isResidentOnly()) mountResidentFinance(residentFinanceHost,state);

@@ -15,6 +15,22 @@ Deno.serve(async req=>{
  if(member?.role!=='admin')return json({error:'Apenas o administrador desta empresa pode configurar o SMTP.'},403);
  const {data:company}=await client.from('companies').select('name,label,logo_url,status').eq('id',b.companyId).single();
  if(company?.status!=='active')return json({error:'Empresa inativa'},403);
+ if(b.action==='history'){
+  const offset=Math.max(0,Math.min(100000,Number.isInteger(b.offset)?b.offset:0));
+  let query=client.from('notification_emails').select('notification_id,status,attempts,created_at,sent_at,next_attempt_at,last_error,notifications!inner(title,kind,user_id,company_id)',{count:'exact'}).eq('notifications.company_id',b.companyId).order('created_at',{ascending:false}).order('notification_id').range(offset,offset+19);
+  if(['pending','retry','sending','sent','review','skipped'].includes(b.status))query=query.eq('status',b.status);
+  const {data:rows,error,count}=await query;if(error)return json({error:'Não foi possível consultar o histórico.'},503);
+  const recipients=new Map();await Promise.all([...new Set((rows||[]).map(r=>r.notifications.user_id))].map(async id=>{const {data}=await client.auth.admin.getUserById(id);recipients.set(id,data?.user?.email||'Conta indisponível');}));
+  return json({rows:(rows||[]).map(r=>({...r,recipient:recipients.get(r.notifications.user_id)})),count});
+ }
+ if(b.action==='retry'){
+  if(!/^[0-9a-f-]{36}$/i.test(b.notificationId||''))return json({error:'Email inválido'},400);
+  const {data:n}=await client.from('notifications').select('id').eq('id',b.notificationId).eq('company_id',b.companyId).maybeSingle();
+  if(!n)return json({error:'Email não encontrado nesta empresa.'},404);
+  // Never automatically repeat an accepted, in-flight or uncertain delivery.
+  const {data:q,error}=await client.from('notification_emails').update({status:'pending',attempts:0,next_attempt_at:new Date().toISOString(),last_error:null}).eq('notification_id',n.id).in('status',['pending','retry']).select('notification_id').maybeSingle();
+  return error||!q?json({error:'Este envio não pode ser repetido automaticamente. Atualize o histórico.'},409):json({ok:true});
+ }
  if(b.action==='save'){
   let c;try{c=validateConfig(b.config);}catch(e){return json({error:e.message},400);}
   const {error}=await client.rpc('company_smtp_secret',{p_company_id:b.companyId,p_config:c});

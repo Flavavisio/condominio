@@ -27,13 +27,24 @@ Deno.serve(async req=>{
    const {data:rows,error:claimError}=await client.rpc('claim_notification_email');if(claimError)throw claimError;
    const item=rows?.[0];if(!item)break;
    const update=async(values:Record<string,unknown>)=>{const {error}=await client.from('notification_emails').update(values).eq('notification_id',item.notification_id);if(error)throw error;};
-   const {data:n}=await client.from('notifications').select('id,user_id,title,body,company_id,condominium_id,kind').eq('id',item.notification_id).maybeSingle();
+   const {data:n}=await client.from('notifications').select('id,user_id,title,body,company_id,condominium_id,kind,payload').eq('id',item.notification_id).maybeSingle();
    if(!n){await update({status:'skipped',last_error:'Aviso removido'});skipped++;continue;}
    const {data:recipient,error:userError}=await client.auth.admin.getUserById(n.user_id);
    if(userError||!recipient.user?.email){await update({status:'skipped',last_error:'Destinatário indisponível'});skipped++;continue;}
    // Verify that the recipient still has access before transmitting a queued notification.
    const {data:allowed}=await client.rpc('can_receive_notification_email',{p_notification_id:n.id});
    if(!allowed){await update({status:'skipped',last_error:'Acesso ao aviso removido'});skipped++;continue;}
+   if(['charge_issued','charge_reminder'].includes(n.kind)){
+    const {data:charge,error:chargeError}=await client.from('fraction_charges').select('status,fraction_id').eq('id',n.payload?.charge_id).maybeSingle();
+    if(chargeError)throw chargeError;
+    const {data:proof,error:proofError}=await client.from('payment_proofs').select('id').eq('charge_id',n.payload?.charge_id).eq('status','pending').limit(1).maybeSingle();
+    if(proofError)throw proofError;
+    const {data:membership,error:membershipError}=charge?await client.from('condominium_members').select('user_id').eq('fraction_id',charge.fraction_id).eq('user_id',n.user_id).eq('status','active').limit(1).maybeSingle():{data:null,error:null};
+    if(membershipError)throw membershipError;
+    if(!membership||!charge||['paid','cancelled'].includes(charge.status)||(n.kind==='charge_reminder'&&proof)){
+     await update({status:'skipped',last_error:'Quota liquidada, anulada ou comprovativo em validação.'});skipped++;continue;
+    }
+   }
    let mail;
    try{
     mail=await notificationMail(client,n);

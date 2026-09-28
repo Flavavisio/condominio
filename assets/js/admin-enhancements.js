@@ -1,4 +1,4 @@
-import {openCompanyEmail} from './company-email.js';
+import {openCompanyEmail,openEmailCenter} from './company-email.js';
 import {planFields,bindPlanFields,loadPlanCatalog,quotePlan,cycleField} from './plans.js';
 import { supabase } from './supabase.js';
 
@@ -454,6 +454,7 @@ function scheduleEnhance() {
     const settings=document.querySelector('#settingsTools');
     if(settings && brandedCompany?.myRole==='admin' && !settings.querySelector('[data-company-email]')){
       const button=document.createElement('button');button.type='button';button.className='ghost-btn';button.dataset.companyEmail='1';button.textContent='Email da empresa';button.onclick=()=>openCompanyEmail(brandedCompany);settings.append(button);
+      const center=document.createElement('button');center.type='button';center.className='ghost-btn';center.textContent='Centro de emails';center.onclick=()=>openEmailCenter(brandedCompany);settings.append(center);
     }
     applyBranding();
     enhanceCompanyRows();

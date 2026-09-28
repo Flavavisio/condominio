@@ -1,0 +1,44 @@
+begin;
+do $$
+declare co uuid:=gen_random_uuid(); condo uuid:=gen_random_uuid(); admin_id uuid:=gen_random_uuid(); resident_id uuid:=gen_random_uuid(); frac uuid:=gen_random_uuid(); mo date:=date_trunc('month',now() at time zone 'Europe/Lisbon')::date; n integer;
+begin
+ insert into auth.users(id,email) values(admin_id,admin_id||'@example.invalid'),(resident_id,resident_id||'@example.invalid');
+ insert into public.companies(id,name,label) values(co,'Recurring fixture','Recurring fixture');
+ insert into public.company_members(company_id,user_id,role,status) values(co,admin_id,'admin','active');
+ insert into public.company_admin_licenses(company_id,user_id,license_key,billing_cycle,starts_on,expires_on,status) values(co,admin_id,gen_random_uuid()::text,'monthly',current_date-1,current_date+31,'active');
+ insert into public.condominiums(id,company_id,name) values(condo,co,'Recurring fixture');
+ insert into public.fractions(id,condominium_id,code,permillage) values(frac,condo,'A',1),(gen_random_uuid(),condo,'B',1),(gen_random_uuid(),condo,'C',1);
+ insert into public.condominium_members(condominium_id,fraction_id,user_id,status) values(condo,frac,resident_id,'active');
+ perform set_config('request.jwt.claim.sub',admin_id::text,true);
+ set local role authenticated;
+ insert into public.recurring_dues(condominium_id,enabled,amount,mode,starts_month,reminders,due_day) values(condo,true,100,'permillage',mo,true,28);
+ begin perform public.process_recurring_dues();raise exception 'User can run global cron';exception when insufficient_privilege then null;end;
+ reset role;
+ perform public.process_recurring_dues();
+ if (select last_error from public.recurring_dues where condominium_id=condo) is not null then raise exception 'Generation error: %',(select last_error from public.recurring_dues where condominium_id=condo);end if;
+ if (select count(*) from public.fraction_charges where condominium_id=condo)<>3 then raise exception 'Wrong number of quotas';end if;
+ if (select sum(amount_due) from public.fraction_charges where condominium_id=condo)<>100 then raise exception 'Rounding lost cents';end if;
+ perform public.process_recurring_dues();
+ if (select count(*) from public.fraction_charges where condominium_id=condo)<>3 then raise exception 'Duplicate run';end if;
+ if (select count(*) from public.notifications where condominium_id=condo and kind='charge_issued')<>1 then raise exception 'Issued email recipients/dedup';end if;
+ update public.recurring_dues set description='Updated description',amount=200 where condominium_id=condo;
+ perform public.process_recurring_dues();
+ if (select sum(amount_due) from public.fraction_charges where condominium_id=condo)<>100 then raise exception 'Rule edit changed existing quotas';end if;
+ update public.fraction_charges set due_date=current_date-8 where condominium_id=condo;
+ perform public.process_recurring_dues();perform public.process_recurring_dues();
+ if (select count(*) from public.notifications where condominium_id=condo and kind='charge_reminder')<>1 then raise exception 'Weekly reminder dedup';end if;
+ update public.fraction_charges set status='paid' where fraction_id=frac;
+ delete from public.notifications where condominium_id=condo and kind='charge_reminder';
+ perform public.process_recurring_dues();
+ if exists(select 1 from public.notifications where condominium_id=condo and kind='charge_reminder') then raise exception 'Paid charge reminder';end if;
+ perform set_config('request.jwt.claim.sub',resident_id::text,true);set local role authenticated;
+ if exists(select 1 from public.recurring_dues where condominium_id=condo) then raise exception 'Resident can read management rule';end if;
+ begin insert into public.recurring_dues(condominium_id,amount,starts_month) values(condo,1,mo);raise exception 'Resident can insert rule';exception when insufficient_privilege then null;end;
+ reset role;
+ -- A manual monthly quota is not duplicated by a later automatic run.
+ delete from public.recurring_due_runs where fraction_id=frac;
+ perform public.process_recurring_dues();
+ if (select count(*) from public.fraction_charges where fraction_id=frac)<>1 then raise exception 'Existing quota duplicated';end if;
+end $$;
+select 'PASS: authorized rules, exact cent distribution, idempotent generation, immutable issued values, deduplicated reminders, paid exclusion, resident restriction' result;
+rollback;

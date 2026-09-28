@@ -188,7 +188,7 @@ function authView() {
   return `
     <main class="auth-page">
       <section class="auth-brand">
-        <div class="brand-mark large">C</div>
+        <div class="boot-logo"><img src="./assets/icons/cf-icon.svg" alt="Condomia"></div>
         <span class="eyebrow">CONDOMIA</span><span class="cf-auth-slogan">Condomínio fácil</span>
         <h1>Menos chamadas.<br>Mais transparência.</h1>
         <p>A plataforma operacional para empresas gestoras, condomínios e condóminos.</p>
@@ -223,7 +223,7 @@ function pendingView() {
   return `
     <main class="pending-page">
       <section class="pending-card">
-        <div class="brand-mark large">C</div>
+        <div class="boot-logo"><img src="./assets/icons/cf-icon.svg" alt="Condomia"></div>
         <span class="eyebrow blue">CONTA CRIADA</span>
         <h1>Olá, ${esc(name)}.</h1>
         <p>A sua conta está ativa, mas ainda não foi associada a uma empresa gestora ou condomínio.</p>

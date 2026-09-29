@@ -6,7 +6,11 @@ O administrador ativa/desativa o módulo, cria várias equipas e escolhe colabor
 
 Cada condomínio pode ter várias checklists. Ao atribuir uma ordem, selecionam-se condomínio, equipa, data, novo serviço ou serviço periódico/manutenção existente e uma ou várias checklists. Os afazeres são copiados para a ordem e não mudam com futuras edições dos modelos.
 
-Apenas o responsável ativo de cada equipa regista início e término com a hora do servidor e a conta do responsável. Cada afazer exige resultado; não realizado/não aplicável exige justificação. O relatório de trabalho é obrigatório, não editável depois da conclusão, consultável e imprimível/PDF. O registo refere-se ao serviço, não à assiduidade. O administrador escolhe o responsável ao editar a equipa; equipas antigas ficam com responsável por definir. Não recolhe GPS.
+Apenas o responsável ativo de cada equipa inicia e fecha os serviços. O chefe de equipa que não seja administrador tem apenas Serviços no menu; o administrador mantém os menus de gestão. As ordens exigem uma equipa previamente criada, ativa e com responsável ativo na empresa.
+
+Durante o serviço, cada visto é guardado: marcado significa feito e desmarcado significa não feito. As horas trabalhadas no serviço da equipa podem ser ajustadas, com valor inicial baseado no tempo decorrido. São guardadas em minutos, separadas dos horários automáticos de início e término; não se multiplicam pelo número de membros. Observações são opcionais. Fechar serviço guarda o estado concluído, os vistos, as horas e um relatório automático quando não há observações. Serviços concluídos não aceitam alterações de progresso. O relatório pode ser impresso/guardado em PDF. Não existe picagem de assiduidade ou GPS.
+
+O administrador escolhe o responsável ao editar a equipa; equipas antigas sem responsável não podem receber novas ordens.
 
 Manutenções totalmente realizadas ficam concluídas. Havendo afazeres não realizados, voltam a agendadas para nova intervenção. Serviços periódicos geram uma visita de execução e atualizam a última data; a próxima data continua a ser gerida no serviço periódico.
 

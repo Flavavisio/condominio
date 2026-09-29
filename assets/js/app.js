@@ -131,6 +131,7 @@ async function loadContext({ keepView = true } = {}) {
 
     const workspace = await api.loadWorkspace(state.user.id);
     Object.assign(state, workspace);
+    state.fsmOnly=await api.getFSMLeaderContext();
     await api.loadCondominiumCovers(state.condominiums);
 
     if (state.selectedCondoId && !state.condominiums.some(item => item.id === state.selectedCondoId)) {
@@ -153,6 +154,7 @@ async function loadContext({ keepView = true } = {}) {
 }
 
 function resetWorkspace() {
+  state.fsmOnly=false;
   state.profile = null;
   state.companies = [];
   state.companyStats = [];
@@ -824,6 +826,7 @@ function bind() {
 }
 
 function render() {
+  if(state.fsmOnly&&state.user&&!isSuperAdmin()&&state.view!=='profile')state.view='fsm';
   if (state.user && isResidentOnly()) {
     if (!['dashboard','operations','notices','assemblies','votes','resident-finance','condo','profile'].includes(state.view)) state.view='dashboard';
     if (!['overview','issues','notices','assemblies','votes','resident-finance'].includes(state.condoTab)) state.condoTab='overview';

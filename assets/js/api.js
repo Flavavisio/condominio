@@ -244,3 +244,5 @@ export async function saveCondominiumCover(id,file,settings) {
   catch(error){if(path)await supabase.storage.from(COVER_BUCKET).remove([path]);throw error;}
   if(settings.cover_path)await supabase.storage.from(COVER_BUCKET).remove([settings.cover_path]);
 }
+
+export async function getFSMLeaderContext(){return throwIfError(await supabase.rpc("fsm_leader_context"));}

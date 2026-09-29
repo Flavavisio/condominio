@@ -22,10 +22,13 @@ begin
  begin perform public.fsm_api(co,'price','{"price":99}');raise exception 'Admin changed price';exception when insufficient_privilege then null;end;
  reset role;perform set_config('request.jwt.claim.sub',worker::text,true);set local role authenticated;
  begin perform public.fsm_api(co,'team',jsonb_build_object('name','Bad','specialty','Bad','members','[]'::jsonb));raise exception 'Worker managed team';exception when insufficient_privilege then null;end;
+ if not public.fsm_leader_context() then raise exception 'Leader context missing';end if;
  perform public.fsm_api(co,'start',jsonb_build_object('id',job));
- begin perform public.fsm_api(co,'finish',jsonb_build_object('id',job,'report','Finished','answers','[]'::jsonb));raise exception 'Incomplete accepted';exception when raise_exception then if sqlerrm='Incomplete accepted' then raise;end if;end;
- perform public.fsm_api(co,'finish',jsonb_build_object('id',job,'report','Cleaned all areas','answers','[{"status":"done","note":""},{"status":"na","note":"Area closed"}]'::jsonb));
- snapshot:=public.fsm_api(co,'read');if snapshot->'jobs'->0->>'status'<>'completed' or snapshot->'jobs'->0->>'started_at' is null then raise exception 'Completion failed';end if;
+ perform public.fsm_api(co,'progress',jsonb_build_object('id',job,'worked_minutes',45,'report','','answers','[{"status":"done"},{"status":"not_done"}]'::jsonb));
+ snapshot:=public.fsm_api(co,'read');if snapshot->'jobs'->0->'answers'->0->>'status'<>'done' or snapshot->'jobs'->0->>'status'<>'progress' then raise exception 'Progress not saved';end if;
+ begin perform public.fsm_api(co,'finish',jsonb_build_object('id',job,'worked_minutes',30,'report','Finished','answers','[]'::jsonb));raise exception 'Incomplete accepted';exception when raise_exception then if sqlerrm='Incomplete accepted' then raise;end if;end;
+ perform public.fsm_api(co,'finish',jsonb_build_object('id',job,'worked_minutes',90,'report','','answers','[{"status":"done","note":""},{"status":"not_done","note":""}]'::jsonb));
+ snapshot:=public.fsm_api(co,'read');if (snapshot->'jobs'->0->>'worked_minutes')::integer<>90 or snapshot->'jobs'->0->>'status'<>'completed' or snapshot->'jobs'->0->>'started_at' is null then raise exception 'Completion failed';end if;
  begin perform public.fsm_api(co,'start',jsonb_build_object('id',job));raise exception 'Restart allowed';exception when raise_exception then if sqlerrm='Restart allowed' then raise;end if;end;
  reset role;perform set_config('request.jwt.claim.sub',outsider::text,true);set local role authenticated;
  begin perform public.fsm_api(co,'read');raise exception 'Tenant read allowed';exception when insufficient_privilege then null;end;

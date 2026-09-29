@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js';
+import {mountCondominiumServices,loadServiceSetup,serviceAssignmentFields,bindServiceAssignment,createServiceOrder} from './fsm.js';
 
 const condoCache = new Map();
 let activeCustomTab = false;
@@ -223,7 +224,9 @@ async function openServiceForm(condo, service=null) {
   if(permissionError)return toast(permissionError.message,true);
   let contracts=[];
   if(canPrice && service){const result=await supabase.from('service_contracts').select('*').eq('condominium_id',condo.id).eq('periodic_service_id',service.id);if(result.error)return toast(result.error.message,true);contracts=result.data||[];}
-  let savedService=service;
+  let setup=null;
+  try {setup=await loadServiceSetup(condo);} catch {} // Ordinary periodic services remain available without FSM.
+  let savedService=service,orderCreated=false;
   const newContractId=crypto.randomUUID();
   const host = document.createElement('div');
   host.innerHTML = serviceForm(condo, suppliers || [], service);
@@ -231,6 +234,14 @@ async function openServiceForm(condo, service=null) {
   document.body.appendChild(modal);
   bindClose(modal);
   if(service) for(const el of modal.querySelectorAll('[name]')) el.value=service[el.name]??'';
+  if(setup?.enabled&&setup.admin){
+    const fields=document.createElement('div');fields.className='wide form-grid';
+    const previous=setup.jobs.find(j=>j.source_type==='periodic'&&j.source_id===service?.id)||{provider_type:'external',supplier_id:service?.supplier_id};
+    modal.querySelector('[name=supplier_id]').closest('label').remove();
+    fields.innerHTML=`<label class="wide fsm-check"><input type="checkbox" name="create_order" ${service?'':'checked'}>Criar ordem de serviço para a próxima execução</label><div class="wide form-grid" data-order-fields>${serviceAssignmentFields(setup,condo,previous)}</div>`;
+    modal.querySelector('.cf-modal-actions').before(fields);bindServiceAssignment(fields,setup);
+    const change=()=>{const enabled=fields.querySelector('[name=create_order]').checked;fields.querySelector('[data-order-fields]').hidden=!enabled;fields.querySelectorAll('[data-order-fields] input,[data-order-fields] select,[data-order-fields] textarea').forEach(el=>el.disabled=!enabled);if(enabled)bindServiceAssignment(fields,setup);modal.querySelector('[name=next_service_on]').required=enabled;};fields.querySelector('[name=create_order]').onchange=change;change();
+  }
   let selectedContract=contracts.find(c=>c.active)||contracts[0]||null;
   if(canPrice){
     const block=document.createElement('div');block.className='wide cf-service-cost-fields';
@@ -242,7 +253,12 @@ async function openServiceForm(condo, service=null) {
 
   modal.querySelector('form').addEventListener('submit', async event => {
     event.preventDefault();
-    const values = Object.fromEntries(new FormData(event.currentTarget));
+    const formData=new FormData(event.currentTarget);
+    const values = Object.fromEntries(formData);
+    const wantsOrder=formData.get('create_order')==='on'&&!orderCreated;
+    for(const key of ['create_order','provider_type','team_id','checklists','tasks'])delete values[key];
+    if(formData.get('provider_type')==='internal')values.supplier_id=null;
+    else if(!formData.has('supplier_id'))values.supplier_id=service?.supplier_id||null;
     const costAmount=values.cost_amount, costInterval=values.cost_interval, costStart=values.cost_start;
     for(const key of ['cost_contract','cost_amount','cost_interval','cost_start'])delete values[key];
     if(canPrice && costAmount && (!costStart||!Number.isFinite(Number(costAmount))||Number(costAmount)<=0))return toast('Indique um valor positivo e a data do primeiro vencimento.',true);
@@ -260,6 +276,10 @@ async function openServiceForm(condo, service=null) {
       const cost={title:values.title,category:values.service_type,supplier_id:values.supplier_id,amount:Number(costAmount)};
       const priceResult=selectedContract?await supabase.from('service_contracts').update(cost).eq('id',selectedContract.id).eq('condominium_id',condo.id).select('id').single():await supabase.from('service_contracts').upsert({...cost,id:newContractId,condominium_id:condo.id,periodic_service_id:savedService.id,interval_months:Number(costInterval||1),starts_on:costStart,next_due_on:costStart},{onConflict:'id'}).select('id').single();
       if(priceResult.error)throw new Error('O serviço foi guardado, mas o custo não: '+priceResult.error.message+'. Pode tentar guardar novamente.');
+    }
+    if(wantsOrder){
+      try {await createServiceOrder(condo,formData,setup,{source_type:'periodic',source_id:savedService.id,title:values.title,scheduled_for:new Date(values.next_service_on+'T'+(values.time_of_day||'09:00')).toISOString()});orderCreated=true;}
+      catch(err){throw new Error('Serviço guardado, mas a ordem não foi criada: '+err.message);}
     }
     } catch(error){button.disabled=false;return toast(error.message||'Não foi possível guardar o serviço.',true);}
     modal.remove();
@@ -311,25 +331,34 @@ async function renderServices(condo) {
   const host = document.querySelector('.cf-services-host');
   if (!host) return;
   host.innerHTML = '<div class="cf-loading">A carregar serviços…</div>';
+  if(document.querySelector('.cf-resident-shell')){
+    const {data,error}=await supabase.rpc('condominium_service_schedule',{p_condominium:condo.id});
+    if(!host.isConnected)return;
+    host.innerHTML=`<section class="panel"><div class="panel-head"><h2>Serviços do condomínio</h2></div>${error?`<p role="alert">${esc(error.message)}</p>`:`<div class="cf-service-grid">${(data||[]).map(j=>`<article class="cf-service-card"><h3>${esc(j.title)}</h3><p>${formatDate(j.scheduled_for)}</p><span>${esc(({scheduled:'Agendado',progress:'Em execução',completed:'Concluído'})[j.status]||'Agendado')}</span></article>`).join('')||'<p>Sem serviços agendados.</p>'}</div>`}</section>`;
+    return;
+  }
   const [{data: services, error}, {data: suppliers}, {data: costs}] = await Promise.all([
     supabase.from('periodic_services').select('*').eq('condominium_id', condo.id).order('next_service_on', { ascending: true, nullsFirst: false }),
     supabase.from('suppliers').select('id,name').eq('condominium_id', condo.id),
     supabase.from('service_contracts').select('*').eq('condominium_id',condo.id)
   ]);
   if (error) { host.innerHTML = `<div class="cf-empty">${esc(error.message)}</div>`; return; }
+  let executionData=null;try{executionData=await loadServiceSetup(condo);}catch{}
+  const latestOrder=id=>executionData?.jobs.find(j=>j.source_type==='periodic'&&j.source_id===id&&j.status!=='cancelled');
   const supplierMap = new Map((suppliers || []).map(s => [s.id, s.name]));
   host.innerHTML = `
-    <section class="panel cf-services-panel">
-      <div class="panel-head"><div><h2>Serviços periódicos</h2><p>Limpeza, jardinagem, piscina e outros serviços recorrentes do edifício.</p></div><button class="primary-btn compact" data-cf-new-service>＋ Novo serviço</button></div>
+    <div data-condo-orders></div><section class="panel cf-services-panel">
+      <div class="panel-head"><div><h2>Serviços periódicos</h2><p>Limpeza, jardinagem, piscina e outros serviços recorrentes do edifício.</p></div><button class="primary-btn compact" data-cf-new-service>＋ Serviço periódico</button></div>
       ${services?.length ? `<div class="cf-service-grid">${services.map(s => `
         <article class="cf-service-card ${s.active ? '' : 'paused'}">
           <div class="cf-service-top"><span>${esc(s.service_type)}</span><b>${s.active ? 'Ativo' : 'Pausado'}</b></div>
           <h3>${esc(s.title)}</h3><p>${(costs||[]).filter(c=>c.periodic_service_id===s.id&&c.active).map(c=>`${Number(c.amount).toLocaleString('pt-PT',{style:'currency',currency:'EUR'})} / ${c.interval_months} mês(es)`).join(' · ')||'Valor por definir — edite o serviço'}</p>
           <p>${esc(s.area || 'Zona não definida')}</p>
-          <div class="cf-service-meta"><span><small>Frequência</small><strong>${esc(s.frequency)}</strong></span><span><small>Próxima</small><strong>${formatDate(s.next_service_on)}</strong></span><span><small>Fornecedor</small><strong>${esc(supplierMap.get(s.supplier_id) || '—')}</strong></span></div>
-          <div class="cf-service-actions"><button class="ghost-btn compact" data-cf-edit-service="${s.id}">Editar</button><button class="ghost-btn compact" data-cf-history="${s.id}">Histórico</button><button class="ghost-btn compact" data-cf-toggle="${s.id}">${s.active ? 'Pausar' : 'Reativar'}</button>${s.active ? `<button class="primary-btn compact" data-cf-done="${s.id}">✓ Executado</button>` : ''}</div>
+          <div class="cf-service-meta"><span><small>Frequência</small><strong>${esc(s.frequency)}</strong></span><span><small>Próxima</small><strong>${formatDate(s.next_service_on)}</strong></span><span><small>Prestador</small><strong>${esc(latestOrder(s.id)?.provider_type==='internal'?'Equipa interna · '+(latestOrder(s.id).team_snapshot?.name||'Equipa'):supplierMap.get(s.supplier_id) || '—')}</strong></span></div>
+          <div class="cf-service-actions"><button class="ghost-btn compact" data-cf-edit-service="${s.id}">Editar</button><button class="ghost-btn compact" data-cf-history="${s.id}">Histórico</button><button class="ghost-btn compact" data-cf-toggle="${s.id}">${s.active ? 'Pausar' : 'Reativar'}</button>${s.active&&!latestOrder(s.id) ? `<button class="primary-btn compact" data-cf-done="${s.id}">✓ Executado</button>` : ''}</div>
         </article>`).join('')}</div>` : '<div class="cf-empty">Ainda não existem serviços periódicos. Crie, por exemplo, a limpeza semanal do edifício.</div>'}
     </section>`;
+  await mountCondominiumServices(host.querySelector('[data-condo-orders]'),condo);
   host.querySelector('[data-cf-new-service]')?.addEventListener('click', () => openServiceForm(condo));
   for (const service of services || []) {
     host.querySelector(`[data-cf-edit-service="${service.id}"]`)?.addEventListener('click',()=>openServiceForm(condo,service));
@@ -363,7 +392,6 @@ async function showServices() {
 }
 
 function injectServicesTab() {
-  if(document.querySelector('.cf-resident-shell')) return;
   const nav = document.querySelector('.module-tabs');
   if (!nav || nav.querySelector('.cf-services-tab')) return;
   const btn = document.createElement('button');

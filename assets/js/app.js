@@ -1,4 +1,4 @@
-import {mountFSM} from './fsm.js';
+import {mountFSM,mountResidentServices} from './fsm.js';
 import {openCompanySetup} from './company-setup.js';
 import {mountDashboardAlerts} from './financial-operations.js';
 import * as api from './api.js';
@@ -854,6 +854,7 @@ function render() {
   else app.innerHTML = dashboardView();
 
   bind();
+  const residentServices=document.querySelector('#residentServices');if(residentServices?.dataset.condominium)mountResidentServices(residentServices,residentServices.dataset.condominium);
   requestAnimationFrame(()=>document.querySelector('.module-tabs .active')?.scrollIntoView({block:'nearest',inline:'nearest'}));
 }
 

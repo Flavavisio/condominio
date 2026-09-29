@@ -138,6 +138,7 @@ function memberCard(member, assignments) {
       <strong>${admin ? 'Acesso a toda a carteira' : `${own.length} condomínio(s) atribuído(s)`}</strong>
     </div>
     <div class="cf-team-actions">
+      ${!admin?`<button type="button" class="cf-team-secondary" data-team-edit="${member.user_id}">Editar</button><button type="button" class="cf-team-secondary" data-team-delete="${member.user_id}">Apagar</button>`:''}
       ${!admin && member.status === 'active' ? `<button type="button" class="cf-team-secondary" data-team-assign="${member.user_id}">Gerir condomínios</button>` : ''}
     </div>
   </article>`;
@@ -164,11 +165,12 @@ async function openTeam() {
           <div><strong>${ctx.condos.length}</strong><span>Condomínios</span></div>
         </div>
         <div class="cf-team-body">
-          <div class="cf-team-section-title"><div><h3>Equipa da empresa</h3><p>O Administrador vê toda a carteira. Gestores e Funcionários veem apenas os condomínios que lhes forem atribuídos.</p></div></div>
+          <div class="cf-team-section-title"><div><h3>Equipa da empresa</h3><p>O Administrador gere a empresa. O Gestor acompanha os condomínios atribuídos. O Funcionário pode ser chefe de uma equipa interna: recebe os serviços, inicia, marca os afazeres e finaliza.</p></div></div>
           <div class="cf-team-list">${ctx.members.length ? ctx.members.map(m=>memberCard(m,ctx.assignments)).join('') : '<div class="cf-team-empty">Ainda não existem colaboradores.</div>'}</div>
         </div>
       </section>`);
 
+    for(const action of ['edit','delete'])root.querySelectorAll(`[data-team-${action}]`).forEach(btn=>btn.onclick=()=>editEmployee(ctx.members.find(m=>m.user_id===btn.dataset[action==='edit'?'teamEdit':'teamDelete']),action));
     root.querySelector('[data-team-invite]')?.addEventListener('click', openInvite);
     root.querySelectorAll('[data-team-assign]').forEach(btn => btn.addEventListener('click', () => {
       const member = ctx.members.find(m => m.user_id === btn.dataset.teamAssign);
@@ -178,6 +180,12 @@ async function openTeam() {
     console.error('Equipa:', error);
     toast(error.message || 'Não foi possível abrir a equipa.', true);
   }
+}
+
+function editEmployee(member,action){
+  const removing=action==='delete';
+  const root=layer('cf-team-modal-backdrop',`<section class="cf-team-modal"><header><div><span>EQUIPA</span><h2>${removing?'Apagar colaborador':'Editar colaborador'}</h2></div><button type="button" data-team-close>✕</button></header><form class="cf-team-form">${removing?`<p class="wide">Retirar <strong>${esc(member.full_name||member.email)}</strong> desta empresa? Perde o acesso à carteira e às equipas desta empresa. O histórico fica guardado e a conta mantém eventuais acessos a outras empresas ou frações.</p>`:`<label class="wide">Nome<input name="full_name" maxlength="160" required value="${esc(member.full_name||'')}"></label><label>Função<select name="role"><option value="manager" ${member.role==='manager'?'selected':''}>Gestor</option><option value="staff" ${member.role==='staff'?'selected':''}>Funcionário</option></select></label><p class="wide">Email de acesso: ${esc(member.email)}. O nome é atualizado apenas nesta empresa.</p>`}<p role="alert" class="wide" data-error></p><div class="cf-team-form-actions wide"><button type="button" class="cf-team-secondary" data-team-close>Cancelar</button><button type="submit" class="cf-team-primary">${removing?'Apagar':'Guardar'}</button></div></form></section>`);
+  root.querySelector('form').onsubmit=async e=>{e.preventDefault();const b=e.target.querySelector('[type=submit]');b.disabled=true;try{const f=new FormData(e.target);const {error}=await supabase.rpc('manage_company_employee',{p_company:company.id,p_user:member.user_id,p_action:action,p_name:f.get('full_name'),p_role:f.get('role')});if(error)throw error;root.remove();toast(removing?'Colaborador retirado da empresa.':'Colaborador atualizado.');await openTeam();}catch(err){root.querySelector('[data-error]').textContent=err.message;b.disabled=false;}};
 }
 
 async function edgeErrorMessage(error, data) {

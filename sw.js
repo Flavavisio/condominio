@@ -1,4 +1,4 @@
-const CACHE = 'condomia-v32-fsm-simple';
+const CACHE = 'condomia-v33-fsm-services';
 const CORE = ['./','./index.html','./app.html','./demo.html','./manifest.webmanifest','./assets/icons/cf-icon.svg'];
 
 self.addEventListener('install', event => {

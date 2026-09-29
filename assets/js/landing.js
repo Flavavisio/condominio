@@ -1,3 +1,4 @@
+import {SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY} from './supabase-config.js';
 import {PLANS,euros,quotePlan,bestPlan} from './plans.js';
 const params=new URLSearchParams(location.search);
 // Preserve old notification links and Auth callbacks after separating the public page.
@@ -11,3 +12,7 @@ const base=document.querySelector('#packBase'),packs=document.querySelector('#ex
 base.innerHTML=PLANS.filter(p=>p.limit>=10).map(p=>`<option value="${p.id}">${p.name} · ${euros(p.price)}/mês</option>`).join('');
 function configure(){const q=quotePlan(base.value,packs.value);choose.hidden=!q;total.textContent=q?`Até ${q.limit} condomínios · ${euros(q.price)}/mês, IVA incluído`:'Indique uma quantidade inteira de packs entre 0 e 1000.';if(q)choose.href=`app.html?plan=${q.id}&extra_packs=${q.extraPacks}`;}
 base.addEventListener('change',configure);packs.addEventListener('input',configure);configure();
+
+// FSM has one server-owned price. Never advertise a fallback price if unavailable.
+const fsmBox=document.createElement('section');fsmBox.className='lp-wrap';fsmBox.style.padding='48px 24px';fsmBox.innerHTML='<p class="lp-eyebrow">MÓDULO OPCIONAL</p><h2>Equipas e serviços no terreno</h2><p>Organize equipas de limpeza, manutenção, eletricidade ou construção. Atribua serviços por condomínio, registe a entrada e conclua com checklists e relatório.</p><p id="fsmPublicPrice" aria-live="polite">A consultar preço do módulo FSM…</p><a class="lp-button" href="app.html">Conhecer o módulo FSM →</a>';document.querySelector('#demonstracao').before(fsmBox);
+fetch(SUPABASE_URL+'/rest/v1/module_catalog?select=monthly_price&id=eq.fsm',{headers:{apikey:SUPABASE_PUBLISHABLE_KEY,Accept:'application/vnd.pgrst.object+json'},signal:AbortSignal.timeout(10000)}).then(async response=>{if(!response.ok)throw Error('Catálogo indisponível');const data=await response.json();document.querySelector('#fsmPublicPrice').textContent=`${euros(data.monthly_price)}/mês por empresa · ${euros(data.monthly_price*12)}/ano · IVA incluído. Adicional ao plano.`;}).catch(()=>{document.querySelector('#fsmPublicPrice').textContent='Preço temporariamente indisponível. Consulte-nos.';});

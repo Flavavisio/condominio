@@ -1,4 +1,4 @@
-const CACHE = 'condomia-v29-reports';
+const CACHE = 'condomia-v30-fsm';
 const CORE = ['./','./index.html','./app.html','./demo.html','./manifest.webmanifest','./assets/icons/cf-icon.svg'];
 
 self.addEventListener('install', event => {

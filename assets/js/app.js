@@ -1,3 +1,4 @@
+import {mountFSM} from './fsm.js';
 import {openCompanySetup} from './company-setup.js';
 import {mountDashboardAlerts} from './financial-operations.js';
 import * as api from './api.js';
@@ -737,6 +738,7 @@ function searchView() {
 }
 
 function bind() {
+  if(state.user&&state.view==='fsm')mountFSM(document.querySelector('#fsmHost'),state,{superAdmin:isSuperAdmin()});
   if(state.user && state.view==='dashboard' && !isResidentOnly() && !isSuperAdmin()) {
     const main=document.querySelector('.main');
     if(main){const alerts=document.createElement('div');alerts.className='fo-dashboard-alerts';main.append(alerts);mountDashboardAlerts(alerts,ui.scopedCondos(state),state.issues);alerts.onclick=e=>{const b=e.target.closest('[data-alert-condo]');if(b){state.selectedCondoId=b.dataset.alertCondo;state.condoTab=b.dataset.alertTab||'finance';state.view='condo';render();}};}
@@ -826,7 +828,7 @@ function render() {
     if (!['dashboard','operations','notices','assemblies','votes','resident-finance','condo','profile'].includes(state.view)) state.view='dashboard';
     if (!['overview','issues','notices','assemblies','votes','resident-finance'].includes(state.condoTab)) state.condoTab='overview';
   }
-  if (isSuperAdmin() && !['dashboard','companies','settings','profile'].includes(state.view)) state.view='dashboard';
+  if (isSuperAdmin() && !['dashboard','companies','settings','profile','fsm'].includes(state.view)) state.view='dashboard';
   if (state.loading) {
     app.innerHTML = '<div class="boot-screen" role="status" aria-live="polite"><div class="boot-logo"><img src="./assets/icons/cf-icon.svg" alt="Condomia"></div><strong>Condomia</strong><span>A carregar dados…</span></div>';
     return;
@@ -836,6 +838,7 @@ function render() {
   else if (!hasAnyAccess()) app.innerHTML = pendingView();
   else if (isResidentOnly() && state.view === 'dashboard') app.innerHTML = residentDashboard();
   else if (isResidentOnly() && state.view === 'resident-finance') app.innerHTML = shell('<div id="residentFinance"></div>');
+  else if (state.view === 'fsm') app.innerHTML = shell('<div id="fsmHost"><section class="panel">A carregar equipas e serviços…</section></div>');
   else if (state.view === 'settings') app.innerHTML = settingsView();
   else if (state.view === 'profile') app.innerHTML = profileView();
   else if (state.view === 'search') app.innerHTML = searchView();

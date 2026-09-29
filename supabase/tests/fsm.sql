@@ -1,0 +1,34 @@
+begin;
+do $$
+declare co uuid:=gen_random_uuid(); co2 uuid:=gen_random_uuid(); condo uuid:=gen_random_uuid(); condo2 uuid:=gen_random_uuid(); adm uuid:=gen_random_uuid(); worker uuid:=gen_random_uuid(); outsider uuid:=gen_random_uuid(); team uuid; list uuid; job uuid; snapshot jsonb;
+begin
+ insert into auth.users(id,email) values(adm,adm||'@example.invalid'),(worker,worker||'@example.invalid'),(outsider,outsider||'@example.invalid');
+ insert into public.companies(id,name,label) values(co,'FSM fixture','FSM fixture'),(co2,'Other','Other');
+ insert into public.company_members(company_id,user_id,role,status) values(co,adm,'admin','active'),(co,worker,'staff','active'),(co2,outsider,'admin','active');
+ insert into public.company_admin_licenses(company_id,user_id,license_key,billing_cycle,starts_on,expires_on,status) values(co,adm,gen_random_uuid()::text,'monthly',current_date-1,current_date+31,'active');
+ insert into public.condominiums(id,company_id,name) values(condo,co,'FSM condo'),(condo2,co2,'Other condo');
+ perform set_config('request.jwt.claim.sub',adm::text,true);set local role authenticated;
+ perform public.fsm_api(co,'activate','{"enabled":true,"price":0}');
+ perform public.fsm_api(co,'team',jsonb_build_object('name','Cleaners','specialty','Limpeza','members',jsonb_build_array(worker)));
+ snapshot:=public.fsm_api(co,'read');team:=(snapshot->'teams'->0->>'id')::uuid;
+ perform public.fsm_api(co,'checklist',jsonb_build_object('condominium_id',condo,'name','Daily','items','["Clean entrance","Clean stairs"]'::jsonb));
+ snapshot:=public.fsm_api(co,'read');list:=(snapshot->'checklists'->0->>'id')::uuid;
+ perform public.fsm_api(co,'job',jsonb_build_object('condominium_id',condo,'team_id',team,'title','Cleaning','scheduled_for',now(),'checklists',jsonb_build_array(list)));
+ snapshot:=public.fsm_api(co,'read');job:=(snapshot->'jobs'->0->>'id')::uuid;
+ perform public.fsm_api(co,'checklist',jsonb_build_object('id',list,'condominium_id',condo,'name','New','items','["Changed"]'::jsonb));
+ snapshot:=public.fsm_api(co,'read');if snapshot->'jobs'->0->'checklist'->0->>'task'<>'Clean entrance' then raise exception 'Snapshot changed';end if;
+ begin perform public.fsm_api(co,'job',jsonb_build_object('condominium_id',condo2,'team_id',team,'title','Bad','scheduled_for',now(),'checklists','[]'::jsonb));raise exception 'Cross tenant allowed';exception when raise_exception then if sqlerrm='Cross tenant allowed' then raise;end if;end;
+ begin perform public.fsm_api(co,'price','{"price":99}');raise exception 'Admin changed price';exception when insufficient_privilege then null;end;
+ reset role;perform set_config('request.jwt.claim.sub',worker::text,true);set local role authenticated;
+ begin perform public.fsm_api(co,'team',jsonb_build_object('name','Bad','specialty','Bad','members','[]'::jsonb));raise exception 'Worker managed team';exception when insufficient_privilege then null;end;
+ perform public.fsm_api(co,'start',jsonb_build_object('id',job));
+ begin perform public.fsm_api(co,'finish',jsonb_build_object('id',job,'report','Finished','answers','[]'::jsonb));raise exception 'Incomplete accepted';exception when raise_exception then if sqlerrm='Incomplete accepted' then raise;end if;end;
+ perform public.fsm_api(co,'finish',jsonb_build_object('id',job,'report','Cleaned all areas','answers','[{"status":"done","note":""},{"status":"na","note":"Area closed"}]'::jsonb));
+ snapshot:=public.fsm_api(co,'read');if snapshot->'jobs'->0->>'status'<>'completed' or snapshot->'jobs'->0->>'started_at' is null then raise exception 'Completion failed';end if;
+ begin perform public.fsm_api(co,'start',jsonb_build_object('id',job));raise exception 'Restart allowed';exception when raise_exception then if sqlerrm='Restart allowed' then raise;end if;end;
+ reset role;perform set_config('request.jwt.claim.sub',outsider::text,true);set local role authenticated;
+ begin perform public.fsm_api(co,'read');raise exception 'Tenant read allowed';exception when insufficient_privilege then null;end;
+ reset role;
+end $$;
+select 'PASS FSM tenant isolation, admin-only management/pricing, team execution, checklist snapshot, required results, entry/exit state machine' result;
+rollback;

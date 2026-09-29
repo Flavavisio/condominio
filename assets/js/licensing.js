@@ -77,8 +77,8 @@ async function injectAdminLicenseBanner() {
   if (document.querySelector('.mockup-shell') && !document.querySelector('.cf-settings-license')) return;
   if (document.querySelector('.cf-license-banner')) return;
   if (!currentUser || access?.is_super_admin || !currentAdminCompany) return;
-  const { data } = await supabase.from('company_admin_licenses').select('id,billing_cycle,starts_on,expires_on,status,license_key,plan_id,extra_packs,condominium_limit,monthly_price').eq('company_id', currentAdminCompany).eq('user_id', currentUser.id).order('created_at',{ascending:false}).limit(1);
-  const license = data?.[0] || null;
+  const { data } = await supabase.from('company_admin_licenses').select('id,company_id,billing_cycle,starts_on,expires_on,status,license_key,plan_id,extra_packs,condominium_limit,monthly_price').eq('company_id', currentAdminCompany).eq('user_id', currentUser.id).order('created_at',{ascending:false}).limit(1);
+  const license = data?.length ? (await enrichLicensePlans(supabase,data))[0] : null;
   const state = effectiveState(license);
   const main = document.querySelector('.main');
   const topbar = document.querySelector('.topbar');

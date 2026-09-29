@@ -9,12 +9,13 @@ begin
  insert into public.condominiums(id,company_id,name) values(condo,co,'FSM condo'),(condo2,co2,'Other condo');
  perform set_config('request.jwt.claim.sub',adm::text,true);set local role authenticated;
  perform public.fsm_api(co,'activate','{"enabled":true,"price":0}');
- perform public.fsm_api(co,'team',jsonb_build_object('name','Cleaners','specialty','Limpeza','members',jsonb_build_array(worker)));
+ perform public.fsm_api(co,'team',jsonb_build_object('name','Cleaners','specialty','Limpeza','leader_id',worker,'members',jsonb_build_array(worker,adm)));
  snapshot:=public.fsm_api(co,'read');team:=(snapshot->'teams'->0->>'id')::uuid;
  perform public.fsm_api(co,'checklist',jsonb_build_object('condominium_id',condo,'name','Daily','items','["Clean entrance","Clean stairs"]'::jsonb));
  snapshot:=public.fsm_api(co,'read');list:=(snapshot->'checklists'->0->>'id')::uuid;
  perform public.fsm_api(co,'job',jsonb_build_object('condominium_id',condo,'team_id',team,'title','Cleaning','scheduled_for',now(),'checklists',jsonb_build_array(list)));
  snapshot:=public.fsm_api(co,'read');job:=(snapshot->'jobs'->0->>'id')::uuid;
+ begin perform public.fsm_api(co,'start',jsonb_build_object('id',job));raise exception 'Non-leader started';exception when raise_exception then if sqlerrm='Non-leader started' then raise;end if;end;
  perform public.fsm_api(co,'checklist',jsonb_build_object('id',list,'condominium_id',condo,'name','New','items','["Changed"]'::jsonb));
  snapshot:=public.fsm_api(co,'read');if snapshot->'jobs'->0->'checklist'->0->>'task'<>'Clean entrance' then raise exception 'Snapshot changed';end if;
  begin perform public.fsm_api(co,'job',jsonb_build_object('condominium_id',condo2,'team_id',team,'title','Bad','scheduled_for',now(),'checklists','[]'::jsonb));raise exception 'Cross tenant allowed';exception when raise_exception then if sqlerrm='Cross tenant allowed' then raise;end if;end;

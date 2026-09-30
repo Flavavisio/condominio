@@ -38,7 +38,7 @@ begin
  begin perform public.fsm_api(co,'start',jsonb_build_object('id',job));raise exception 'Restart allowed';exception when raise_exception then if sqlerrm='Restart allowed' then raise;end if;end;
  reset role;perform set_config('request.jwt.claim.sub',resident::text,true);set local role authenticated;
  snapshot:=public.condominium_service_schedule(condo);
- if jsonb_array_length(snapshot)<>1 or (snapshot->0)-array['id','title','scheduled_for','status']<>'{}'::jsonb then raise exception 'Resident private details leak';end if;
+ if jsonb_array_length(snapshot)<>1 or (snapshot->0)-array['id','title','scheduled_for','status','service_performed']<>'{}'::jsonb then raise exception 'Resident private details leak';end if;
  begin perform public.fsm_api(co,'read');raise exception 'Resident FSM access';exception when insufficient_privilege then null;end;
  begin perform public.condominium_service_schedule(condo2);raise exception 'Resident other condo access';exception when insufficient_privilege then null;end;
  reset role;perform set_config('request.jwt.claim.sub',adm::text,true);set local role authenticated;

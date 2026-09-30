@@ -1,5 +1,5 @@
 // Local-only data adapter for the actual application modules. No network or real Auth.
-const KEY='condomia-demo-workspace-v6';
+const KEY='condomia-demo-workspace-v7';
 const leaderDemo=new URLSearchParams(location.search).get('role')==='leader';
 const role=new URLSearchParams(location.search).get('role')==='resident'?'resident':'manager';
 const now=new Date(),iso=d=>d.toISOString(),day=d=>iso(d).slice(0,10),at=n=>new Date(now.getTime()+n*86400000);
@@ -60,7 +60,8 @@ function rpc(name,p={}){try{
   if(role!=='manager'||leaderDemo)throw Error('Apenas administrador');const m=db.company_members.find(m=>m.user_id===p.p_user);if(!m||m.role==='admin')throw Error('Colaborador inválido');
   if(p.p_action==='edit'){m.display_name=p.p_name;m.role=p.p_role;}else{if((db.fsm_jobs||[]).some(j=>j.leader_id===p.p_user&&['scheduled','progress'].includes(j.status)))throw Error('Existem serviços pendentes');db.company_members=db.company_members.filter(x=>x!==m);db.condominium_staff_assignments=(db.condominium_staff_assignments||[]).filter(x=>x.user_id!==p.p_user);}save();return result(true);
  }
- if(name==='condominium_service_schedule')return result((db.fsm_jobs||[]).filter(j=>j.condominium_id===p.p_condominium&&j.status!=='cancelled').map(({id,title,scheduled_for,status})=>({id,title,scheduled_for,status})));
+ if(name==='condominium_service_schedule')return result((db.fsm_jobs||[]).filter(j=>j.condominium_id===p.p_condominium&&j.status!=='cancelled').map(({id,title,scheduled_for,status,service_performed})=>({id,title,scheduled_for,status,service_performed})));
+ if(name==='periodic_service_workflow')return result(demoPeriodic(p));
  if(name==='fsm_api')return result(demoFSM(p));
  if(name==='get_my_access_context')return query('profiles',db.profiles.filter(r=>r.user_id===user.id));
  if(name==='generate_service_expenses'){if(role!=='manager')throw Error('Sem permissões.');let total=0;for(const c of db.service_contracts.filter(c=>c.condominium_id===p.p_condominium_id&&c.active)){let due=c.next_due_on;while(due<=day(now)&&(!c.ends_on||due<=c.ends_on)){if(!db.condominium_expenses.some(e=>e.contract_id===c.id&&e.due_on===due)){db.condominium_expenses.push({id:crypto.randomUUID(),condominium_id:c.condominium_id,contract_id:c.id,supplier_id:c.supplier_id,description:c.title,category:c.category,amount:c.amount,due_on:due,status:'pending'});total++;}const anchor=new Date(c.starts_on+'T12:00:00Z'),current=new Date(due+'T12:00:00Z'),months=(current.getUTCFullYear()-anchor.getUTCFullYear())*12+current.getUTCMonth()-anchor.getUTCMonth()+Number(c.interval_months);const next=new Date(Date.UTC(anchor.getUTCFullYear(),anchor.getUTCMonth()+months,1));next.setUTCDate(Math.min(anchor.getUTCDate(),new Date(Date.UTC(next.getUTCFullYear(),next.getUTCMonth()+1,0)).getUTCDate()));due=next.toISOString().slice(0,10);}c.next_due_on=due;}save();return result(total);}
@@ -101,6 +102,34 @@ function demoFSM(p){
  if(a==='team_delete'){if(db.fsm_jobs.some(j=>j.team_id===d.id&&['scheduled','progress'].includes(j.status)))throw Error('Conclua ou cancele os serviços pendentes');Object.assign(db.fsm_teams.find(t=>t.id===d.id),{active:false,archived_at:stamp()});}
  if(a==='team'||a==='checklist'){const rows=a==='team'?db.fsm_teams:db.fsm_checklists;let x=rows.find(x=>x.id===d.id);if(!x){x={id:crypto.randomUUID(),active:true};rows.push(x);}Object.assign(x,d,{id:x.id});}
  if(a==='job'){const t=db.fsm_teams.find(t=>t.id===d.team_id);if(d.provider_type==='internal'&&(!t?.active||!t.leader_id))throw Error('Equipa inválida');db.fsm_jobs.push({...d,id:crypto.randomUUID(),leader_id:t?.leader_id||null,team_snapshot:t?{name:t.name,leader_name:db.profiles.find(x=>x.user_id===t.leader_id)?.full_name,members:t.member_names||[]}:{},status:'scheduled',answers:[],checklist:[...db.fsm_checklists.filter(x=>d.checklists.includes(x.id)).flatMap(x=>x.items.map(task=>({task,checklist:x.name}))),...(d.tasks||[]).map(task=>({task,checklist:'Checklist do serviço'}))],events:[]});}
- if(['start','progress','finish','cancel'].includes(a)){const j=db.fsm_jobs.find(x=>x.id===d.id);if(!j)throw Error('Serviço inválido.');if(a!=='cancel'&&j.leader_id!==role&&!(j.provider_type==='external'&&!leaderDemo))throw Error('Só o responsável da equipa pode iniciar ou terminar o serviço.');if(a==='start'){if(j.status!=='scheduled')throw Error('Já iniciado.');Object.assign(j,{status:'progress',started_at:stamp(),started_by:role});}if(a==='finish'||a==='progress'){if(j.status!=='progress')throw Error('Inicie o serviço.');if(d.answers.length!==j.checklist.length||d.answers.some(x=>!['done','not_done'].includes(x.status)))throw Error('Preencha e justifique os afazeres.');Object.assign(j,{status:a==='finish'?'completed':'progress',completed_at:a==='finish'?stamp():null,completed_by:a==='finish'?role:null,answers:d.answers,worked_minutes:Math.max(0,Math.floor((Date.now()-Date.parse(j.started_at))/60000)),report:d.report||(a==='finish'?'Serviço concluído.':'')});}if(a==='cancel'){if(j.status!=='scheduled')throw Error('Já iniciado.');j.status='cancelled';}}
+ if(['start','progress','finish','cancel'].includes(a)){const j=db.fsm_jobs.find(x=>x.id===d.id);if(!j)throw Error('Serviço inválido.');if(a!=='cancel'&&j.leader_id!==role&&!(j.provider_type==='external'&&!leaderDemo))throw Error('Só o responsável da equipa pode iniciar ou terminar o serviço.');if(a==='start'){if(j.status!=='scheduled')throw Error('Já iniciado.');Object.assign(j,{status:'progress',started_at:stamp(),started_by:role});}if(a==='finish'||a==='progress'){if(j.status!=='progress')throw Error('Inicie o serviço.');if(d.answers.length!==j.checklist.length||d.answers.some(x=>!['done','not_done'].includes(x.status)))throw Error('Preencha e justifique os afazeres.');Object.assign(j,{status:a==='finish'?'completed':'progress',completed_at:a==='finish'?stamp():null,completed_by:a==='finish'?role:null,answers:d.answers,service_performed:d.service_performed??true,worked_minutes:Math.max(0,Math.floor((Date.now()-Date.parse(j.started_at))/60000)),report:d.report||(a==='finish'?'Serviço concluído.':'')});}if(a==='finish'&&j.service_id){const ps=db.periodic_services.find(s=>s.id===j.service_id),cfg=(db.fsm_service_settings||[]).find(c=>c.service_id===j.service_id);if(ps&&cfg){ps.next_service_on=nextDemoServiceDay(ps.next_service_on,ps.frequency,cfg.weekdays);if(d.service_performed!==false)ps.last_service_on=day(new Date());scheduleDemoService(ps,cfg);}}if(a==='cancel'){if(j.status!=='scheduled')throw Error('Já iniciado.');j.status='cancelled';}}
  save();return {ok:true};
+}
+
+function nextDemoServiceDay(date,frequency,weekdays=[]){
+ if(frequency==='Pontual')return null;
+ const d=new Date(Math.max(new Date(date+'T12:00:00Z').getTime(),new Date(day(new Date())+'T12:00:00Z').getTime()));
+ if(['Semanal','Quinzenal'].includes(frequency)&&weekdays.length){for(let i=frequency==='Quinzenal'?8:1;i<=(frequency==='Quinzenal'?14:7);i++){const n=new Date(d);n.setUTCDate(n.getUTCDate()+i);if(weekdays.includes(n.getUTCDay()||7))return day(n);}}
+ const months={Mensal:1,Bimestral:2,Trimestral:3,Semestral:6,Anual:12}[frequency];if(months)d.setUTCMonth(d.getUTCMonth()+months);else d.setUTCDate(d.getUTCDate()+({'Diária':1,Semanal:7,Quinzenal:14}[frequency]||7));return day(d);
+}
+function scheduleDemoService(s,cfg){
+ if(!s.active||!cfg.orders_enabled||!s.next_service_on)return null;
+ const existing=db.fsm_jobs.find(j=>j.service_id===s.id&&['scheduled','progress'].includes(j.status));if(existing)return existing.id;
+ const t=db.fsm_teams.find(t=>t.id===cfg.team_id),id=crypto.randomUUID();db.fsm_jobs.push({id,company_id:'co',condominium_id:s.condominium_id,source_type:'periodic',source_id:s.id,service_id:s.id,title:s.title,scheduled_for:new Date(s.next_service_on+'T'+(s.time_of_day||'09:00')).toISOString(),provider_type:cfg.provider_type,team_id:t?.id||null,leader_id:t?.leader_id||null,supplier_id:cfg.supplier_id,team_snapshot:t?{name:t.name,leader_name:db.profiles.find(p=>p.user_id===t.leader_id)?.full_name,members:t.member_names||[]}: {},checklist:cfg.tasks.map(task=>({task,checklist:'Checklist do serviço'})),answers:[],status:'scheduled',events:[]});return id;
+}
+function demoPeriodic(p){
+ if(role!=='manager'||leaderDemo)throw Error('Apenas administrador');
+ demoFSM({p_company:p.p_company,p_action:'read'});db.fsm_service_settings??=[];
+ const d=p.p_data||{};
+ if(p.p_action==='read')return {settings:db.fsm_service_settings.filter(c=>db.periodic_services.some(s=>s.id===c.service_id&&s.condominium_id===d.condominium_id)),jobs:db.fsm_jobs.filter(j=>j.condominium_id===d.condominium_id).sort((a,b)=>b.scheduled_for.localeCompare(a.scheduled_for))};
+ const s=db.periodic_services.find(s=>s.id===d.service_id);if(!s)throw Error('Serviço inválido');let cfg=db.fsm_service_settings.find(c=>c.service_id===s.id);
+ if(p.p_action==='save'){
+  if(d.provider_type==='internal'&&!db.fsm_teams.some(t=>t.id===d.team_id&&t.active&&t.leader_id))throw Error('Equipa inválida');
+  if(d.provider_type==='external'&&!db.suppliers.some(x=>x.id===d.supplier_id&&x.condominium_id===s.condominium_id))throw Error('Fornecedor inválido');
+  if(!cfg){cfg={service_id:s.id};db.fsm_service_settings.push(cfg);}Object.assign(cfg,d);
+  if(cfg.weekdays.length&&['Semanal','Quinzenal'].includes(s.frequency)&&!cfg.weekdays.includes(new Date(s.next_service_on+'T12:00:00Z').getUTCDay()||7)){const n=new Date(s.next_service_on+'T12:00:00Z');while(!cfg.weekdays.includes(n.getUTCDay()||7))n.setUTCDate(n.getUTCDate()+1);s.next_service_on=day(n);}
+  for(const j of db.fsm_jobs.filter(j=>j.service_id===s.id&&j.status==='scheduled')){if(!cfg.orders_enabled)j.status='cancelled';else {const t=db.fsm_teams.find(t=>t.id===d.team_id);Object.assign(j,{title:s.title,provider_type:d.provider_type,team_id:t?.id||null,supplier_id:d.supplier_id,leader_id:t?.leader_id||null,checklist:d.tasks.map(task=>({task,checklist:'Checklist do serviço'})),scheduled_for:new Date(s.next_service_on+'T'+(s.time_of_day||'09:00')).toISOString()});}}
+ }
+ if(p.p_action==='toggle'){s.active=d.active;if(!s.active)db.fsm_jobs.filter(j=>j.service_id===s.id&&j.status==='scheduled').forEach(j=>j.status='cancelled');}
+ const id=cfg?scheduleDemoService(s,cfg):null;save();return {ok:true,job_id:id};
 }

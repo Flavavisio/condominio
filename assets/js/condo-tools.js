@@ -1,5 +1,5 @@
 import { supabase } from './supabase.js';
-import {mountCondominiumServices,loadServiceSetup,serviceAssignmentFields,bindServiceAssignment,createServiceOrder} from './fsm.js';
+import {loadServiceSetup,serviceAssignmentFields,bindServiceAssignment,periodicWorkflow,openPeriodicExecution} from './fsm.js';
 
 const condoCache = new Map();
 let activeCustomTab = false;
@@ -187,8 +187,8 @@ function serviceForm(condo, suppliers, service=null) {
           <label class="wide">Descrição<input name="title" required placeholder="Limpeza das escadas e patamares"></label>
           <label>Tipo<select name="service_type"><option>Limpeza</option><option>Jardinagem</option><option>Piscina</option><option>Controlo de pragas</option><option>Garagens</option><option>Resíduos</option><option>Áreas comuns</option><option>Outro</option></select></label>
           <label>Zona<input name="area" placeholder="Blocos A e B"></label>
-          <label>Frequência<select name="frequency"><option>Diária</option><option selected>Semanal</option><option>Quinzenal</option><option>Mensal</option><option>Bimestral</option><option>Trimestral</option><option>Semestral</option><option>Anual</option></select></label>
-          <label>Dia habitual<select name="weekday"><option value="">—</option><option>Segunda-feira</option><option>Terça-feira</option><option>Quarta-feira</option><option>Quinta-feira</option><option>Sexta-feira</option><option>Sábado</option><option>Domingo</option></select></label>
+          <label>Frequência<select name="frequency"><option>Diária</option><option selected>Semanal</option><option>Quinzenal</option><option>Mensal</option><option>Bimestral</option><option>Trimestral</option><option>Semestral</option><option>Anual</option><option>Pontual</option></select></label>
+          <fieldset class="wide cf-weekdays"><legend>Dias de execução (semanal / quinzenal)</legend>${['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'].map((day,i)=>`<label class="fsm-check"><input name="weekdays" type="checkbox" value="${i+1}">${day}</label>`).join('')}</fieldset>
           <label>Hora<input name="time_of_day" type="time"></label>
           <label>Próxima execução<input name="next_service_on" type="date"></label>
           <label>Fornecedor<select name="supplier_id"><option value="">Sem fornecedor</option>${suppliers.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select></label>
@@ -226,21 +226,23 @@ async function openServiceForm(condo, service=null) {
   if(canPrice && service){const result=await supabase.from('service_contracts').select('*').eq('condominium_id',condo.id).eq('periodic_service_id',service.id);if(result.error)return toast(result.error.message,true);contracts=result.data||[];}
   let setup=null;
   try {setup=await loadServiceSetup(condo);} catch {} // Ordinary periodic services remain available without FSM.
-  let savedService=service,orderCreated=false;
+  let savedService=service;
+  let workflow={settings:[],jobs:[]};if(setup?.enabled&&setup.admin){try{workflow=await periodicWorkflow(condo,'read',{condominium_id:condo.id});}catch(e){return toast(e.message,true);}}
   const newContractId=crypto.randomUUID();
   const host = document.createElement('div');
   host.innerHTML = serviceForm(condo, suppliers || [], service);
   const modal = host.firstElementChild;
   document.body.appendChild(modal);
   bindClose(modal);
-  if(service) for(const el of modal.querySelectorAll('[name]')) el.value=service[el.name]??'';
+  if(service) for(const el of modal.querySelectorAll('[name]:not([type=checkbox])')) el.value=service[el.name]??'';
   if(setup?.enabled&&setup.admin){
     const fields=document.createElement('div');fields.className='wide form-grid';
-    const previous=setup.jobs.find(j=>j.source_type==='periodic'&&j.source_id===service?.id)||{provider_type:'external',supplier_id:service?.supplier_id};
+    const previous=workflow.settings.find(x=>x.service_id===service?.id)||workflow.jobs.find(j=>j.service_id===service?.id)||{provider_type:'external',supplier_id:service?.supplier_id};
+    for(const el of modal.querySelectorAll('[name=weekdays]'))el.checked=(previous.weekdays?.length?previous.weekdays:([1,2,3,4,5,6,7].filter(n=>String(service?.weekday||'').toLowerCase().includes(['segunda','terça','quarta','quinta','sexta','sábado','domingo'][n-1])))).includes(Number(el.value));
     modal.querySelector('[name=supplier_id]').closest('label').remove();
-    fields.innerHTML=`<label class="wide fsm-check"><input type="checkbox" name="create_order" ${service?'':'checked'}>Criar ordem de serviço para a próxima execução</label><div class="wide form-grid" data-order-fields>${serviceAssignmentFields(setup,condo,previous)}</div>`;
+    fields.innerHTML=`<h3 class="wide">Ordem de serviço e checklist</h3><label class="wide fsm-check"><input type="checkbox" name="orders_enabled" ${previous.orders_enabled!==false?'checked':''}>Gerar ordens de serviço para as execuções</label><p class="wide">Ao terminar uma execução, a próxima ordem é criada de acordo com a frequência e os dias selecionados. Editar o serviço atualiza a ordem ainda por iniciar.</p>${serviceAssignmentFields(setup,condo,previous)}`;
     modal.querySelector('.cf-modal-actions').before(fields);bindServiceAssignment(fields,setup);
-    const change=()=>{const enabled=fields.querySelector('[name=create_order]').checked;fields.querySelector('[data-order-fields]').hidden=!enabled;fields.querySelectorAll('[data-order-fields] input,[data-order-fields] select,[data-order-fields] textarea').forEach(el=>el.disabled=!enabled);if(enabled)bindServiceAssignment(fields,setup);modal.querySelector('[name=next_service_on]').required=enabled;};fields.querySelector('[name=create_order]').onchange=change;change();
+    const change=()=>{modal.querySelector('[name=next_service_on]').required=fields.querySelector('[name=orders_enabled]').checked;};fields.querySelector('[name=orders_enabled]').onchange=change;change();
   }
   let selectedContract=contracts.find(c=>c.active)||contracts[0]||null;
   if(canPrice){
@@ -255,8 +257,9 @@ async function openServiceForm(condo, service=null) {
     event.preventDefault();
     const formData=new FormData(event.currentTarget);
     const values = Object.fromEntries(formData);
-    const wantsOrder=formData.get('create_order')==='on'&&!orderCreated;
-    for(const key of ['create_order','provider_type','team_id','checklists','tasks'])delete values[key];
+    const weekdays=formData.getAll('weekdays').map(Number);
+    values.weekday=weekdays.map(n=>['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'][n-1]).join(', ');
+    for(const key of ['orders_enabled','provider_type','team_id','checklists','tasks','weekdays'])delete values[key];
     if(formData.get('provider_type')==='internal')values.supplier_id=null;
     else if(!formData.has('supplier_id'))values.supplier_id=service?.supplier_id||null;
     const costAmount=values.cost_amount, costInterval=values.cost_interval, costStart=values.cost_start;
@@ -277,9 +280,9 @@ async function openServiceForm(condo, service=null) {
       const priceResult=selectedContract?await supabase.from('service_contracts').update(cost).eq('id',selectedContract.id).eq('condominium_id',condo.id).select('id').single():await supabase.from('service_contracts').upsert({...cost,id:newContractId,condominium_id:condo.id,periodic_service_id:savedService.id,interval_months:Number(costInterval||1),starts_on:costStart,next_due_on:costStart},{onConflict:'id'}).select('id').single();
       if(priceResult.error)throw new Error('O serviço foi guardado, mas o custo não: '+priceResult.error.message+'. Pode tentar guardar novamente.');
     }
-    if(wantsOrder){
-      try {await createServiceOrder(condo,formData,setup,{source_type:'periodic',source_id:savedService.id,title:values.title,scheduled_for:new Date(values.next_service_on+'T'+(values.time_of_day||'09:00')).toISOString()});orderCreated=true;}
-      catch(err){throw new Error('Serviço guardado, mas a ordem não foi criada: '+err.message);}
+    if(setup?.enabled&&setup.admin){
+      try{await periodicWorkflow(condo,'save',{service_id:savedService.id,provider_type:formData.get('provider_type'),team_id:formData.get('team_id'),supplier_id:formData.get('supplier_id'),tasks:String(formData.get('tasks')||'').split('\n').map(x=>x.trim()).filter(Boolean),weekdays,orders_enabled:formData.get('orders_enabled')==='on'});}
+      catch(err){throw new Error('Serviço guardado, mas a ordem/checklist não foram atualizadas: '+err.message);}
     }
     } catch(error){button.disabled=false;return toast(error.message||'Não foi possível guardar o serviço.',true);}
     modal.remove();
@@ -321,10 +324,8 @@ async function showHistory(service) {
   bindClose(modal);
 }
 
-async function toggleService(service, condo) {
-  const { error } = await supabase.from('periodic_services').update({ active: !service.active }).eq('id', service.id);
-  if (error) return toast(error.message, true);
-  renderServices(condo);
+async function toggleService(service,condo,settings){
+ try{if(settings)await periodicWorkflow(condo,'toggle',{service_id:service.id,active:!service.active});else{const {error}=await supabase.from('periodic_services').update({active:!service.active}).eq('id',service.id);if(error)throw error;}await renderServices(condo);}catch(e){toast(e.message,true);}
 }
 
 async function renderServices(condo) {
@@ -334,7 +335,7 @@ async function renderServices(condo) {
   if(document.querySelector('.cf-resident-shell')){
     const {data,error}=await supabase.rpc('condominium_service_schedule',{p_condominium:condo.id});
     if(!host.isConnected)return;
-    host.innerHTML=`<section class="panel"><div class="panel-head"><h2>Serviços do condomínio</h2></div>${error?`<p role="alert">${esc(error.message)}</p>`:`<div class="cf-service-grid">${(data||[]).map(j=>`<article class="cf-service-card"><h3>${esc(j.title)}</h3><p>${formatDate(j.scheduled_for)}</p><span>${esc(({scheduled:'Agendado',progress:'Em execução',completed:'Concluído'})[j.status]||'Agendado')}</span></article>`).join('')||'<p>Sem serviços agendados.</p>'}</div>`}</section>`;
+    host.innerHTML=`<section class="panel"><div class="panel-head"><h2>Serviços do condomínio</h2></div>${error?`<p role="alert">${esc(error.message)}</p>`:`<div class="cf-service-grid">${(data||[]).map(j=>`<article class="cf-service-card"><h3>${esc(j.title)}</h3><p>${formatDate(j.scheduled_for)}</p><span>${esc(j.status==='completed'?(j.service_performed===false?'Não efetuado':'✓ Efetuado'):({scheduled:'Agendado',progress:'Em execução'})[j.status]||'Agendado')}</span></article>`).join('')||'<p>Sem serviços agendados.</p>'}</div>`}</section>`;
     return;
   }
   const [{data: services, error}, {data: suppliers}, {data: costs}] = await Promise.all([
@@ -343,28 +344,33 @@ async function renderServices(condo) {
     supabase.from('service_contracts').select('*').eq('condominium_id',condo.id)
   ]);
   if (error) { host.innerHTML = `<div class="cf-empty">${esc(error.message)}</div>`; return; }
-  let executionData=null;try{executionData=await loadServiceSetup(condo);}catch{}
-  const latestOrder=id=>executionData?.jobs.find(j=>j.source_type==='periodic'&&j.source_id===id&&j.status!=='cancelled');
+  let executionData=null,workflow={settings:[],jobs:[]};try{executionData=await loadServiceSetup(condo);if(executionData.admin)workflow=await periodicWorkflow(condo,'read',{condominium_id:condo.id});}catch(e){toast(e.message,true);}
+  const settings=id=>workflow.settings.find(x=>x.service_id===id);
+  const latestOrder=id=>workflow.jobs.find(j=>j.service_id===id&&['scheduled','progress'].includes(j.status))||workflow.jobs.find(j=>j.service_id===id&&j.status!=='cancelled');
+  const lastCompleted=id=>workflow.jobs.find(j=>j.service_id===id&&j.status==='completed');
+  const provider=id=>{const cfg=settings(id)||latestOrder(id);return cfg?.provider_type==='internal'?'Equipa interna · '+(executionData?.teams.find(t=>t.id===cfg.team_id)?.name||'Equipa'):null;};
   const supplierMap = new Map((suppliers || []).map(s => [s.id, s.name]));
   host.innerHTML = `
-    <div data-condo-orders></div><section class="panel cf-services-panel">
-      <div class="panel-head"><div><h2>Serviços periódicos</h2><p>Limpeza, jardinagem, piscina e outros serviços recorrentes do edifício.</p></div><button class="primary-btn compact" data-cf-new-service>＋ Serviço periódico</button></div>
+    <section class="panel cf-services-panel">
+      <div class="panel-head"><div><h2>Serviços periódicos</h2><p>Limpeza, jardinagem, piscina e outros serviços recorrentes do edifício.</p></div><button class="primary-btn compact" data-cf-new-service>+ Serviço periódico</button></div>
       ${services?.length ? `<div class="cf-service-grid">${services.map(s => `
         <article class="cf-service-card ${s.active ? '' : 'paused'}">
           <div class="cf-service-top"><span>${esc(s.service_type)}</span><b>${s.active ? 'Ativo' : 'Pausado'}</b></div>
           <h3>${esc(s.title)}</h3><p>${(costs||[]).filter(c=>c.periodic_service_id===s.id&&c.active).map(c=>`${Number(c.amount).toLocaleString('pt-PT',{style:'currency',currency:'EUR'})} / ${c.interval_months} mês(es)`).join(' · ')||'Valor por definir — edite o serviço'}</p>
           <p>${esc(s.area || 'Zona não definida')}</p>
-          <div class="cf-service-meta"><span><small>Frequência</small><strong>${esc(s.frequency)}</strong></span><span><small>Próxima</small><strong>${formatDate(s.next_service_on)}</strong></span><span><small>Prestador</small><strong>${esc(latestOrder(s.id)?.provider_type==='internal'?'Equipa interna · '+(latestOrder(s.id).team_snapshot?.name||'Equipa'):supplierMap.get(s.supplier_id) || '—')}</strong></span></div>
-          <div class="cf-service-actions"><button class="ghost-btn compact" data-cf-edit-service="${s.id}">Editar</button><button class="ghost-btn compact" data-cf-history="${s.id}">Histórico</button><button class="ghost-btn compact" data-cf-toggle="${s.id}">${s.active ? 'Pausar' : 'Reativar'}</button>${s.active&&!latestOrder(s.id) ? `<button class="primary-btn compact" data-cf-done="${s.id}">✓ Executado</button>` : ''}</div>
+          <div class="cf-service-meta"><span><small>Frequência</small><strong>${esc(s.frequency)}${s.weekday?'<br>'+esc(s.weekday):''}</strong></span><span><small>Próxima</small><strong>${formatDate(s.next_service_on)}</strong></span><span><small>Prestador</small><strong>${esc(provider(s.id)||supplierMap.get(s.supplier_id)||'—')}</strong></span></div>
+          ${lastCompleted(s.id)?`<p class="cf-service-result">Última execução: ${lastCompleted(s.id).service_performed===false?'✕ Não efetuado':'✓ Efetuado'} · ${formatDate(lastCompleted(s.id).completed_at)}</p>`:''}
+          ${settings(s.id)?`<p class="cf-service-result">${latestOrder(s.id)?latestOrder(s.id).status==='completed'?(latestOrder(s.id).service_performed===false?'Não efetuado':'✓ Efetuado'):(latestOrder(s.id).status==='progress'?'Em execução':'Próxima ordem agendada'):'Sem ordem aberta'} · ${settings(s.id).tasks.length} afazeres</p>`:''}
+          <div class="cf-service-actions"><button class="ghost-btn compact" data-cf-edit-service="${s.id}">Editar</button><button class="ghost-btn compact" data-cf-history="${s.id}">Histórico</button>${settings(s.id)||workflow.jobs.some(j=>j.service_id===s.id)?`<button class="primary-btn compact" data-cf-order="${s.id}">Ordem de serviço</button>`:''}<button class="ghost-btn compact" data-cf-toggle="${s.id}">${s.active ? 'Pausar' : 'Reativar'}</button>${s.active&&!settings(s.id)&&!latestOrder(s.id) ? `<button class="primary-btn compact" data-cf-done="${s.id}">✓ Executado</button>` : ''}</div>
         </article>`).join('')}</div>` : '<div class="cf-empty">Ainda não existem serviços periódicos. Crie, por exemplo, a limpeza semanal do edifício.</div>'}
     </section>`;
-  await mountCondominiumServices(host.querySelector('[data-condo-orders]'),condo);
   host.querySelector('[data-cf-new-service]')?.addEventListener('click', () => openServiceForm(condo));
   for (const service of services || []) {
+    host.querySelector(`[data-cf-order="${service.id}"]`)?.addEventListener('click',()=>openPeriodicExecution(condo,service,()=>renderServices(condo)));
     host.querySelector(`[data-cf-edit-service="${service.id}"]`)?.addEventListener('click',()=>openServiceForm(condo,service));
     host.querySelector(`[data-cf-done="${service.id}"]`)?.addEventListener('click', () => markServiceDone(service, condo));
-    host.querySelector(`[data-cf-history="${service.id}"]`)?.addEventListener('click', () => showHistory(service));
-    host.querySelector(`[data-cf-toggle="${service.id}"]`)?.addEventListener('click', () => toggleService(service, condo));
+    host.querySelector(`[data-cf-history="${service.id}"]`)?.addEventListener('click', ()=>workflow.jobs.some(j=>j.service_id===service.id)?openPeriodicExecution(condo,service,()=>renderServices(condo)):showHistory(service));
+    host.querySelector(`[data-cf-toggle="${service.id}"]`)?.addEventListener('click', () => toggleService(service, condo,settings(service.id)));
   }
 }
 
